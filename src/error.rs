@@ -51,6 +51,10 @@ pub enum AppError {
     /// Resource not found
     #[error("Not found: {0}")]
     NotFound(String),
+
+    /// Security violation (path access outside sandbox)
+    #[error("Security error: {0}")]
+    Security(String),
 }
 
 /// Specialized Result type for application errors.

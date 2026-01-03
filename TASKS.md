@@ -2,6 +2,34 @@
 
 This document tracks planned features, improvements, and technical tasks for GopenPal.
 
+## Recently Completed ✅
+
+### Agent System (2026-01-03)
+- [x] **Karen Agent** - Executive assistant for reminders, memory, and task management
+  - Full personality system with 5 moods
+  - 20+ message library entries
+  - TASK_TOOL integration with 7 commands
+  - Integrated into startup scripts and TUI
+- [x] **Date/Time Awareness** - All agents now receive current date/time in prompts
+- [x] **TUI Agents Tab** - Visual dashboard showing all 4 agents with moods, relationships, last interaction
+- [x] **Achievement Auto-Unlock** - Automatic achievement checking with desktop notifications
+- [x] **Work Session Tracking Schema** - Database tables for FKD methodology, tasks, follow-ups, networking
+- [x] **Multi-Agent Daemon** - All 4 agents (Hydrix, Serhant, Mio, Karen) running via start-day.sh
+- [x] **Comprehensive Startup Scripts** - start-day.sh and stop-day.sh for full ecosystem management
+
+## In Progress 🚧
+
+### Security & Organization
+- [ ] **World Folder Structure** - Organize all data files in dedicated world directory
+  - Create .gopenpal_world/ for database and logs
+  - Update default paths in CLI
+  - Migrate existing data structure
+- [ ] **Path Sandboxing Security** - Restrict agent file access to workspace only
+  - Security module with path validation
+  - Canonicalization to prevent directory traversal
+  - Settings configuration for sandbox control
+  - Integration into file operations
+
 ## High Priority
 
 ### Agent System Enhancements
@@ -18,11 +46,11 @@ This document tracks planned features, improvements, and technical tasks for Gop
   - Add personality validation in message generation
   - Create agent-specific prompt templates
 
-- [ ] **Agent Daemon Enhancements**
+- [x] **Agent Daemon Enhancements**
   - Add support for multiple agents running simultaneously
   - Implement agent-specific intervals and probabilities
-  - Add time-of-day awareness (e.g., Hydrix more active during work hours, Serhant in morning)
-  - Add notification preferences (sound, urgency levels)
+  - Add time-of-day awareness (e.g., Hydrix more active during work hours, Serhant in morning) (pending)
+  - Add notification preferences (sound, urgency levels) (pending)
 
 ### AI Chat Improvements
 
@@ -72,10 +100,10 @@ This document tracks planned features, improvements, and technical tasks for Gop
   - Unlock new message types at relationship milestones
   - Special events/interactions at max relationship
 
-- [ ] **Achievement System Integration**
+- [x] **Achievement System Integration**
   - Trigger achievements based on user behavior
   - Achievement unlock notifications with agent celebrations
-  - Achievement viewer in TUI
+  - Achievement viewer in TUI (CLI completed)
 
 - [ ] **More Agents**
   - **Tempo**: Time management and productivity rhythm specialist
@@ -85,10 +113,10 @@ This document tracks planned features, improvements, and technical tasks for Gop
 
 ### Work Session Tracking (Serhant Integration)
 
-- [ ] **FKD Time-Blocking System**
+- [x] **FKD Time-Blocking System** (Database schema completed)
   - Track FINDER/KEEPER/DOER time blocks
-  - AI-suggested time block schedules
-  - Integration with calendar APIs
+  - AI-suggested time block schedules (pending)
+  - Integration with calendar APIs (pending)
 
 - [ ] **Sales Pipeline Tracking**
   - Log deals, follow-ups, and client interactions
@@ -102,7 +130,7 @@ This document tracks planned features, improvements, and technical tasks for Gop
 
 ### TUI Enhancements
 
-- [ ] **Agent Dashboard Tab**
+- [x] **Agent Dashboard Tab**
   - View all agents, their moods, relationship levels
   - Recent interactions from each agent
   - Quick trigger for agent messages

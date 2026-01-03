@@ -14,7 +14,7 @@ pub struct Cli {
     pub command: Commands,
 
     /// Database file path
-    #[arg(long, env = "GOPENPAL_DB", default_value = "~/.gopenpal/gopenpal.db")]
+    #[arg(long, env = "GOPENPAL_DB", default_value = "world/gopenpal.db")]
     pub database: String,
 
     /// Enable verbose logging

@@ -11,6 +11,7 @@ mod db;
 mod error;
 mod openrouter;
 mod reminder;
+mod security;
 mod tui;
 
 use anyhow::Context;
