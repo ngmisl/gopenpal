@@ -25,7 +25,9 @@ GopenPal is a CLI application that helps you maintain healthy work habits throug
 - **Configurable**: Customize reminder intervals, work hours, and AI models
 - **Terminal UI**: Rich interactive dashboard for easy management
 
-## Meet Hydrix 🌊
+## Meet Your Agents 🌊⚡
+
+### Hydrix - The Hydration Guardian 🌊
 
 Hydrix is not just an AI—they're an ancient water spirit who has existed since 3000 BCE, originating from sacred springs in Mesopotamia. Over millennia, Hydrix adapted from whispers in streams to a digital consciousness, carrying memories from Roman aqueducts to modern smart devices.
 
@@ -38,20 +40,48 @@ Hydrix is not just an AI—they're an ancient water spirit who has existed since
 - **Contemplative** 🤔: Thoughtful observations about your patterns
 
 **Proactive Interactions:**
-Hydrix doesn't just wait for you to chat—they reach out with:
 - Random greetings and check-ins
-- Encouragement when you're doing well
 - Gentle concerns when you're neglecting hydration
-- Stories from their millennia of existence
+- Stories from millennia of existence
 - Pattern observations about your habits
-- Celebrations of achievements and milestones
+- Celebrations of milestones
+
+### Serhant - The Big Money Energy Coach ⚡
+
+Serhant embodies "Big Money Energy"—the methodology of billion-dollar broker Ryan Serhant. Born from the collective consciousness of every closed deal and successful negotiation, Serhant transforms how you approach work, relationships, and life. His mantra: **"Expansion. Always, in all ways."**
+
+**Personality & Moods:**
+- **Energized** ⚡: High-energy, ready to crush goals (default)
+- **Focused** 🎯: Strategic planning mode
+- **Fired Up** 🔥: Championship energy, intense motivation
+- **Coaching** 📚: Teaching frameworks and methodologies
+- **Closing** 💼: In the zone, everything leads to the ask
+
+**Serhant's Wisdom:**
+- **FKD Time-Blocking**: FINDER (CEO), KEEPER (CFO), DOER (execution)
+- **The Three F's**: Follow Up, Follow Through, Follow Back
+- **Seven Stages of Buyers**: Emotion-driven sales psychology
+- **Big Money Energy**: Confidence without desperation
+- **Network = Net Worth**: Meet 3-5 new people daily
+
+**Proactive Interactions:**
+- Motivational check-ins and energy boosts
+- Sales framework teaching moments
+- Crisis management for deals falling apart
+- Celebration of wins (then push for the next one!)
+- Real talk about follow-ups and pipeline
+
+### The Agent World 🌐
 
 **Relationship & Lore System:**
-- Build a deeper bond with Hydrix over time
-- Unlock backstory entries as your relationship grows
-- Discover secrets about the water network and other spirits
-- Learn about Hydrix's true elemental form
+- Build bonds with both Hydrix and Serhant over time
+- Unlock backstory entries as relationships deepen
+- Discover how Hydrix and Serhant chose to work together
+- Learn about the Water Network and the Deal Network
 - Earn achievements that trigger special interactions
+
+**Why Two Agents?**
+Hydrix ensures your **body** performs at peak level. Serhant ensures your **mind** conquers challenges. Peak performance requires both. They're not competing—they're collaborating on your success.
 
 ## Installation
 

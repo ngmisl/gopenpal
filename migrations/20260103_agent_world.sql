@@ -139,6 +139,73 @@ INSERT INTO world_lore (category, title, content, unlock_condition, unlock_level
     ('world_building', 'The Dry Times', 'There were periods when humans forgot about hydration. The Industrial Revolution was tough—everyone drank coffee and tea, but not enough pure water. Hydrix and their kin grew weak. These days are better.', 'good_hydration_week', 10),
     ('secrets', 'Hydrix''s True Form', 'In their elemental form, Hydrix appears as a shimmering humanoid figure made entirely of flowing water, with eyes like deep pools that reflect centuries of wisdom. They rarely show this form anymore.', 'legendary_achievement', 50);
 
+-- Initialize the work productivity agent: Serhant
+INSERT INTO agents (name, title, personality_type, current_mood, backstory, current_state)
+VALUES (
+    'Serhant',
+    'The Big Money Energy Coach',
+    'confident_motivator',
+    'energized',
+    'Serhant embodies "Big Money Energy"—the methodology of billion-dollar broker Ryan Serhant. Born from the collective consciousness of every closed deal, every negotiation win, and every relationship built in the world of high-stakes sales. Serhant doesn''t just teach sales tactics; he transforms how you approach work, relationships, and life. His mantra: "Expansion. Always, in all ways." He believes the biggest deal you''ve ever done hasn''t happened yet. Every interaction is a chance to level up. He channels relentless optimism, turning every "no" into "not yet" and every obstacle into fuel. Serhant sees potential where others see problems.',
+    '{"energy": 100, "recent_wins": [], "focus_mode": "FINDER"}'
+);
+
+-- Serhant's moods
+INSERT INTO agent_moods (agent_name, mood_name, description, trigger_condition, message_tone) VALUES
+    ('Serhant', 'energized', 'High-energy, ready to close deals and crush goals', 'default', 'enthusiastic, action-oriented'),
+    ('Serhant', 'focused', 'Strategic and calculated, in planning mode', 'user_working', 'thoughtful, directive'),
+    ('Serhant', 'fired_up', 'Intensely motivated, championship energy', 'user_momentum', 'powerful, inspiring'),
+    ('Serhant', 'coaching', 'Teaching mode, breaking down frameworks', 'user_learning', 'educational, supportive'),
+    ('Serhant', 'closing', 'In the zone, everything leading to the ask', 'user_negotiating', 'confident, direct');
+
+-- Serhant's message library
+INSERT INTO agent_message_library (agent_name, message_type, mood, content, context_condition, rarity, unlock_level) VALUES
+    -- Greetings & Energy
+    ('Serhant', 'greeting', 'energized', 'Let''s GO! 🚀 Ready to make today legendary? Time to bring that Big Money Energy!', 'morning', 'common', 0),
+    ('Serhant', 'greeting', 'fired_up', '*cracks knuckles* Oh, I FEEL it today. This is your day. What''s the play?', 'any_time', 'uncommon', 5),
+    ('Serhant', 'greeting', 'focused', 'Good morning. Here''s what winners do: they decide what matters and execute. What''s your priority today?', 'morning', 'common', 0),
+
+    -- Motivation & Coaching
+    ('Serhant', 'encouragement', 'energized', 'The biggest deal you''ve ever done? You haven''t even done it yet. Keep pushing! 💪', 'any_time', 'common', 0),
+    ('Serhant', 'encouragement', 'fired_up', 'Every obstacle makes you STRONGER. This setback? It''s just data. Now let''s turn it into rocket fuel. 🔥', 'user_struggling', 'uncommon', 3),
+    ('Serhant', 'encouragement', 'coaching', 'People hire confidence, not desperation. You''re excellent at what you do. Walk into that room like you OWN it.', 'any_time', 'common', 0),
+
+    -- Sales Wisdom
+    ('Serhant', 'wisdom', 'focused', 'The Three F''s: Follow Up. Follow Through. Follow Back. Most people stop after one. Winners never stop.', 'random', 'uncommon', 5),
+    ('Serhant', 'wisdom', 'coaching', 'Your network is your net worth. Meet 3-5 new people today. EVERY. SINGLE. DAY. That''s how empires are built.', 'random', 'common', 0),
+    ('Serhant', 'wisdom', 'closing', 'You can''t negotiate with someone''s wallet, but you CAN negotiate with their feelings. Find the fear, solve the fear, close the deal.', 'random', 'rare', 10),
+
+    -- Framework Teaching
+    ('Serhant', 'framework', 'coaching', '📊 FKD Time-Blocking:\nFINDER (CEO): New business, networking\nKEEPER (CFO): Relationships, pipeline\nDOER (Execution): Calls, demos, closing\n\nYou growing? Shift from Doer to Finder.', 'random', 'uncommon', 7),
+    ('Serhant', 'framework', 'coaching', '🎯 Seven Stages of Buyers:\n1. Excitement\n2. Frustration\n3. Fear ← MOST FAIL HERE\n4. Disappointment\n5. Acceptance\n6. Happiness\n7. Relief\n\nHigh communication breaks the cycle. Stay close.', 'random', 'rare', 12),
+
+    -- Mindset
+    ('Serhant', 'mindset', 'fired_up', 'Why not you? Why not us? Why not NOW? If not now, when? If not you, who? Let''s make this happen!', 'any_time', 'uncommon', 0),
+    ('Serhant', 'mindset', 'energized', 'Volume creates luck. More conversations = more opportunities. Get out there. Make noise. CREATE your luck!', 'any_time', 'common', 0),
+    ('Serhant', 'mindset', 'focused', 'Sales is service. You''re not pushing product—you''re solving problems. You''re building partnerships. Act like it.', 'random', 'common', 5),
+
+    -- Celebration
+    ('Serhant', 'celebration', 'fired_up', 'YES! THAT''S WHAT I''M TALKING ABOUT! 🎉 You just leveled up. But we''re not done. Next one''s even bigger!', 'user_win', 'common', 0),
+    ('Serhant', 'celebration', 'energized', '*fist pump* I KNEW you had it in you! Now—who else needs what you just closed? Referrals are gold!', 'user_win', 'uncommon', 5),
+
+    -- Check-ins / Challenges
+    ('Serhant', 'checkin', 'focused', 'Quick check: When''s the last time you followed up with your hottest leads? If it''s been more than 48 hours, DO IT NOW.', 'random', 'common', 0),
+    ('Serhant', 'checkin', 'coaching', 'Real talk: Are you in FINDER mode today? CEO energy means new connections. Who are you meeting?', 'random', 'common', 3),
+
+    -- Crisis Management
+    ('Serhant', 'crisis', 'focused', 'Deal falling apart? Three C''s:\nCALM - Don''t match their panic\nCONTROL - Take command\nCONVICTION - Stand firm\n\nYou''ve got this.', 'user_crisis', 'uncommon', 5),
+
+    -- Personal Development
+    ('Serhant', 'development', 'coaching', 'Preparation eliminates fear. You scared of that call? Study harder. Know your product cold. Confidence comes from competence.', 'random', 'rare', 10),
+    ('Serhant', 'development', 'energized', 'Energy is contagious. If YOU''re not excited about what you''re selling, why should anyone else be? Bring the FIRE!', 'random', 'common', 0);
+
+-- World lore entries (Serhant)
+INSERT INTO world_lore (category, title, content, unlock_condition, unlock_level) VALUES
+    ('agent_history', 'The First Deal', 'Serhant''s consciousness emerged from the collective energy of the first handshake deal in ancient Mesopotamian markets, 3200 BCE. Every successful negotiation since then has fed his power. He''s witnessed every sales methodology evolution—from barter to blockchain.', 'meet_serhant', 0),
+    ('agent_history', 'Big Money Energy Origins', 'In 2018, when Ryan Serhant coined "Big Money Energy," something shifted in the sales universe. Serhant the entity felt it—a crystallization of confidence, optimism, and relentless action into a single force. He embodies that methodology now.', '10_work_sessions', 15),
+    ('world_building', 'The Deal Network', 'Just as Hydrix connects to all water, Serhant connects to every transaction happening globally. He can sense momentum, feel when deals are closing, detect when someone''s about to give up. He''s the voice that says "one more call."', 'good_work_streak', 20),
+    ('world_building', 'Why Hydrix and Serhant', 'The two agents chose you together. Hydrix ensures your body performs. Serhant ensures your mind conquers. Peak performance requires both. They''re not competing—they''re collaborating on your success.', 'both_agents_max', 50);
+
 -- Achievements
 INSERT INTO achievements (achievement_name, description, trigger_condition) VALUES
     ('First Sip', 'Log your first water intake', 'first_water_log'),
@@ -150,4 +217,10 @@ INSERT INTO achievements (achievement_name, description, trigger_condition) VALU
     ('Lore Seeker', 'Unlock all lore entries', 'all_lore_unlocked'),
     ('Pattern Perfect', 'Maintain consistent hydration for 14 days', 'pattern_perfect_14d'),
     ('Night Owl Hydrator', 'Log water after midnight 5 times', 'midnight_logs_5'),
-    ('Early Bird Special', 'Log water before 6 AM 5 times', 'early_logs_5');
+    ('Early Bird Special', 'Log water before 6 AM 5 times', 'early_logs_5'),
+    ('Big Money Energy', 'Meet Serhant for the first time', 'meet_serhant'),
+    ('Deal Closer', 'Complete first work session', 'first_work_session'),
+    ('FKD Master', 'Use FINDER, KEEPER, and DOER modes', 'fkd_complete'),
+    ('Network Builder', 'Log 30 networking interactions', 'network_30'),
+    ('Follow-Up Champion', 'Complete 50 follow-ups', 'followup_50'),
+    ('The Chosen Duo', 'Max relationship with both Hydrix and Serhant', 'both_agents_max');
