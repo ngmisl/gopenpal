@@ -18,6 +18,8 @@ use crate::cron::CronManager;
 use crate::db::Database;
 use crate::error::Result;
 use crate::openrouter::{Message, OpenRouterClient};
+use crate::security::SecurityConfig;
+use std::process::{Command, Stdio};
 
 /// Load agent and tool configurations from JSON files.
 fn load_agent_configs() -> std::result::Result<String, Box<dyn std::error::Error>> {
@@ -298,12 +300,13 @@ impl ChatSession {
 
             let assistant_message = &response.choices[0].message;
 
-            // Process and execute stats commands first, then cron, then delegation
+            // Process and execute stats commands first, then cron, then delegation, then grep
             let (content_after_stats, stats_result) =
                 process_stats_commands(&assistant_message.content, &self.db).await;
             let (content_after_cron, cron_result) = process_cron_commands(&content_after_stats);
-            let (display_content, delegate_result) =
+            let (content_after_delegate, delegate_result) =
                 process_delegate_commands(&content_after_cron, &self.db, &self.client, &self.model).await;
+            let (display_content, grep_result) = process_grep_commands(&content_after_delegate);
 
             println!("{}", display_content);
 
@@ -322,7 +325,12 @@ impl ChatSession {
                 println!("{}\n", result);
             }
 
-            if stats_result.is_none() && cron_result.is_none() && delegate_result.is_none() {
+            if let Some(ref result) = grep_result {
+                print_colored("\n[GREP] ", Color::Green)?;
+                println!("{}\n", result);
+            }
+
+            if stats_result.is_none() && cron_result.is_none() && delegate_result.is_none() && grep_result.is_none() {
                 println!();
             }
 
@@ -384,14 +392,15 @@ impl ChatSession {
         let assistant_message = &response.choices[0].message;
         messages.push(assistant_message.clone());
 
-        // Process stats commands first, then cron, then delegation
+        // Process stats commands first, then cron, then delegation, then grep
         let (content_after_stats, stats_result) =
             process_stats_commands(&assistant_message.content, &self.db).await;
         let (content_after_cron, cron_result) = process_cron_commands(&content_after_stats);
-        let (cleaned_content, delegate_result) =
+        let (content_after_delegate, delegate_result) =
             process_delegate_commands(&content_after_cron, &self.db, &self.client, &self.model).await;
+        let (cleaned_content, grep_result) = process_grep_commands(&content_after_delegate);
 
-        // Build full response with stats, cron, and delegation results
+        // Build full response with stats, cron, delegation, and grep results
         let mut full_response = cleaned_content;
         if let Some(result) = stats_result {
             full_response.push_str(&format!("\n\n[STATS] {}", result));
@@ -401,6 +410,9 @@ impl ChatSession {
         }
         if let Some(result) = delegate_result {
             full_response.push_str(&format!("\n\n[DELEGATE] {}", result));
+        }
+        if let Some(result) = grep_result {
+            full_response.push_str(&format!("\n\n[GREP] {}", result));
         }
 
         // Save assistant message
@@ -739,6 +751,216 @@ async fn process_delegate_commands(
     cleaned = cleaned.trim().to_string();
 
     (cleaned, result_message)
+}
+
+/// Process grep commands in AI response.
+///
+/// # Arguments
+///
+/// * `content` - The AI's response content
+///
+/// # Returns
+///
+/// Tuple of (cleaned_content, optional_grep_result)
+fn process_grep_commands(content: &str) -> (String, Option<String>) {
+    let mut result_message = None;
+    let mut cleaned = content.to_string();
+
+    // Load security config for path validation
+    let security_config = match SecurityConfig::load_from_file("configs/security.json") {
+        Ok(config) => config,
+        Err(_) => SecurityConfig::default(),
+    };
+
+    // Check for GREP:SEARCH command
+    if let Some(start) = content.find("[GREP:SEARCH:") {
+        if let Some(end) = content[start..].find(']') {
+            let command = &content[start..start + end + 1];
+            let params = command
+                .trim_start_matches("[GREP:SEARCH:")
+                .trim_end_matches(']');
+
+            let parts: Vec<&str> = params.split('|').collect();
+            if !parts.is_empty() {
+                let pattern = parts[0];
+                let search_path = if parts.len() > 1 { parts[1] } else { "." };
+
+                // Validate path is within sandbox
+                if !security_config.is_path_safe(search_path) {
+                    result_message = Some(format!(
+                        "Error: Access denied - path '{}' is outside the allowed workspace",
+                        search_path
+                    ));
+                } else {
+                    let result = execute_ripgrep_search(pattern, search_path);
+                    result_message = Some(result);
+                }
+            }
+            cleaned = cleaned.replace(command, "");
+        }
+    }
+
+    // Check for GREP:READ command (with optional line range)
+    if let Some(start) = content.find("[GREP:READ:") {
+        if let Some(end) = content[start..].find(']') {
+            let command = &content[start..start + end + 1];
+            let params = command
+                .trim_start_matches("[GREP:READ:")
+                .trim_end_matches(']');
+
+            let parts: Vec<&str> = params.split('|').collect();
+            if !parts.is_empty() {
+                let file_path = parts[0];
+
+                // Validate path is within sandbox
+                if !security_config.is_path_safe(file_path) {
+                    result_message = Some(format!(
+                        "Error: Access denied - path '{}' is outside the allowed workspace",
+                        file_path
+                    ));
+                } else if parts.len() == 3 {
+                    // Read with line range
+                    if let (Ok(start_line), Ok(end_line)) = (
+                        parts[1].parse::<usize>(),
+                        parts[2].parse::<usize>(),
+                    ) {
+                        let result = read_file_lines(file_path, Some((start_line, end_line)));
+                        result_message = Some(result);
+                    } else {
+                        result_message = Some("Error: Invalid line numbers".to_string());
+                    }
+                } else {
+                    // Read entire file
+                    let result = read_file_lines(file_path, None);
+                    result_message = Some(result);
+                }
+            }
+            cleaned = cleaned.replace(command, "");
+        }
+    }
+
+    // Clean up any extra whitespace
+    cleaned = cleaned.trim().to_string();
+
+    (cleaned, result_message)
+}
+
+/// Execute ripgrep search.
+fn execute_ripgrep_search(pattern: &str, search_path: &str) -> String {
+    // Try using ripgrep (rg) first
+    let rg_result = Command::new("rg")
+        .arg("--line-number")
+        .arg("--no-heading")
+        .arg("--color=never")
+        .arg("--max-count=50") // Limit to 50 matches per file
+        .arg(pattern)
+        .arg(search_path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn();
+
+    match rg_result {
+        Ok(child) => {
+            let output = child.wait_with_output();
+            match output {
+                Ok(output) => {
+                    if output.status.success() {
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        if stdout.is_empty() {
+                            format!("No matches found for pattern '{}'", pattern)
+                        } else {
+                            let lines: Vec<&str> = stdout.lines().take(100).collect(); // Limit total output
+                            if lines.len() == 100 {
+                                format!(
+                                    "=== Search Results (showing first 100 matches) ===\n\n{}\n\n... (results truncated)",
+                                    lines.join("\n")
+                                )
+                            } else {
+                                format!(
+                                    "=== Search Results ({} matches) ===\n\n{}",
+                                    lines.len(),
+                                    lines.join("\n")
+                                )
+                            }
+                        }
+                    } else {
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        if stderr.contains("No such file or directory") {
+                            format!("Error: Path '{}' not found", search_path)
+                        } else {
+                            format!("Search error: {}", stderr)
+                        }
+                    }
+                }
+                Err(e) => format!("Error executing search: {}", e),
+            }
+        }
+        Err(_) => {
+            // Fallback message if ripgrep not available
+            "Error: ripgrep (rg) is not installed. Please install it to use search functionality.".to_string()
+        }
+    }
+}
+
+/// Read file contents with optional line range.
+fn read_file_lines(file_path: &str, line_range: Option<(usize, usize)>) -> String {
+    match fs::read_to_string(file_path) {
+        Ok(contents) => {
+            let lines: Vec<&str> = contents.lines().collect();
+
+            if let Some((start, end)) = line_range {
+                if start == 0 || start > lines.len() || end > lines.len() || start > end {
+                    return format!(
+                        "Error: Invalid line range {}:{} for file with {} lines",
+                        start,
+                        end,
+                        lines.len()
+                    );
+                }
+
+                let selected_lines: Vec<String> = lines[(start - 1)..end]
+                    .iter()
+                    .enumerate()
+                    .map(|(i, line)| format!("{:4} | {}", start + i, line))
+                    .collect();
+
+                format!(
+                    "=== {} (lines {}-{}) ===\n\n{}",
+                    file_path,
+                    start,
+                    end,
+                    selected_lines.join("\n")
+                )
+            } else {
+                // Read entire file
+                let max_lines = 500; // Limit total lines to prevent overwhelming output
+                let total_lines = lines.len();
+
+                let display_lines: Vec<String> = lines
+                    .iter()
+                    .take(max_lines)
+                    .enumerate()
+                    .map(|(i, line)| format!("{:4} | {}", i + 1, line))
+                    .collect();
+
+                if total_lines > max_lines {
+                    format!(
+                        "=== {} (showing first {} of {} lines) ===\n\n{}\n\n... (file truncated)",
+                        file_path, max_lines, total_lines,
+                        display_lines.join("\n")
+                    )
+                } else {
+                    format!(
+                        "=== {} ({} lines) ===\n\n{}",
+                        file_path,
+                        total_lines,
+                        display_lines.join("\n")
+                    )
+                }
+            }
+        }
+        Err(e) => format!("Error reading file '{}': {}", file_path, e),
+    }
 }
 
 /// Delegate a request to a specific agent.

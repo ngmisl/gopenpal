@@ -47,6 +47,18 @@ This document tracks planned features, improvements, and technical tasks for Gop
   - Interaction logging for delegation events
   - Integration into chat interactive and send_message flows
 
+### File Operations (2026-01-03)
+- [x] **Implement GREP_TOOL** (File searching and reading)
+  - Ripgrep integration for fast file searching
+  - Implemented `[GREP:SEARCH:{pattern}|{path}]` command processing
+  - Implemented `[GREP:READ:{file_path}]` for reading entire files
+  - Implemented `[GREP:READ:{file_path}|{start}|{end}]` for line ranges
+  - Security sandbox validation - all file operations restricted to workspace
+  - Output limiting (100 search results, 500 file lines max)
+  - Access granted to Mio and Karen for productivity assistance
+  - Error handling for missing files and invalid paths
+  - Integration into chat processing pipeline
+
 ## High Priority
 
 ### Agent System Enhancements

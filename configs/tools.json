@@ -278,6 +278,68 @@
         "Provide context to the specialist agent",
         "Synthesize responses from multiple agents when coordinating"
       ]
+    },
+    {
+      "name": "GREP_TOOL",
+      "category": "file_operations",
+      "description": "Search and read files within the workspace using ripgrep",
+      "access": ["Mio", "Karen"],
+      "priority": "secondary",
+      "usage_notes": "Use to help users find information in their files, read code, or search documentation",
+      "commands": [
+        {
+          "syntax": "[GREP:SEARCH:{pattern}|{path}]",
+          "description": "Search for pattern in files",
+          "parameters": {
+            "pattern": "Search pattern (regex supported)",
+            "path": "Optional path to search (defaults to current directory)"
+          },
+          "examples": [
+            "[GREP:SEARCH:TODO|src/]",
+            "[GREP:SEARCH:function.*main|.]",
+            "[GREP:SEARCH:error|logs/]"
+          ],
+          "output": "Returns matching lines with file paths and line numbers"
+        },
+        {
+          "syntax": "[GREP:READ:{file_path}]",
+          "description": "Read entire file contents",
+          "parameters": {
+            "file_path": "Path to file to read"
+          },
+          "examples": [
+            "[GREP:READ:README.md]",
+            "[GREP:READ:src/main.rs]",
+            "[GREP:READ:configs/agents.json]"
+          ],
+          "output": "Returns full file contents with line numbers"
+        },
+        {
+          "syntax": "[GREP:READ:{file_path}|{start}|{end}]",
+          "description": "Read specific lines from a file",
+          "parameters": {
+            "file_path": "Path to file to read",
+            "start": "Starting line number",
+            "end": "Ending line number"
+          },
+          "examples": [
+            "[GREP:READ:src/main.rs|1|50]",
+            "[GREP:READ:README.md|10|30]"
+          ],
+          "output": "Returns specified lines with line numbers"
+        }
+      ],
+      "security_notes": [
+        "All file operations are restricted to the workspace directory",
+        "Cannot access files outside the sandbox",
+        "Paths with .. are validated and may be rejected"
+      ],
+      "best_practices": [
+        "Use specific search patterns to avoid overwhelming results",
+        "Read only necessary file sections when possible",
+        "Explain what you're searching for and why",
+        "Respect user privacy - don't read sensitive files without permission"
+      ]
     }
   ],
   "tool_usage_philosophy": {
