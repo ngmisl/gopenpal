@@ -2,16 +2,19 @@
 
 Personal LLM health and work assistant written in Rust.
 
-GopenPal is a CLI application that helps you maintain healthy work habits through water intake tracking, intelligent reminders, and AI-powered assistance using OpenRouter. **Now featuring a living world of AI agents with personalities, lore, and proactive interactions!** 🌊✨
+GopenPal is a CLI application that helps you maintain healthy work habits through water intake tracking, intelligent reminders, and AI-powered assistance using OpenRouter. **Now featuring a living world of three AI agents (Hydrix 🌊, Serhant ⚡, Mio 🌸) with unique personalities, lore, and proactive interactions!** ✨
 
 ## Features
 
-- **Living Agent World** 🌊: Meet Hydrix, an ancient water spirit living in your computer
+- **Living Agent World** 🌊⚡🌸: Three unique AI agents with distinct personalities
+  - **Hydrix** 🌊: Ancient water spirit guarding your hydration
+  - **Serhant** ⚡: Big Money Energy coach for work and sales
+  - **Mio** 🌸: Personal concierge coordinating between all agents
   - **Rich Backstory**: Discover lore spanning thousands of years
-  - **Dynamic Personality**: Mood changes based on your hydration habits
-  - **Proactive Messages**: Hydrix reaches out randomly with encouragement, concern, or stories
-  - **Relationship System**: Build a bond with Hydrix as they learn about you
-  - **Lore Unlocks**: Uncover secrets and backstory as your relationship deepens
+  - **Dynamic Personalities**: Moods change based on your habits and progress
+  - **Proactive Messages**: Agents reach out randomly with encouragement, coaching, or stories
+  - **Relationship System**: Build bonds with each agent as they learn about you
+  - **Lore Unlocks**: Uncover secrets and backstory as relationships deepen
   - **Achievements**: Unlock special moments and recognition for your progress
 
 - **Water Intake Tracking**: Log and monitor your daily water consumption
@@ -71,17 +74,46 @@ Serhant embodies "Big Money Energy"—the methodology of billion-dollar broker R
 - Celebration of wins (then push for the next one!)
 - Real talk about follow-ups and pipeline
 
+### Mio - Your Personal Concierge 🌸
+
+Mio is your personal concierge who emerged when Hydrix and Serhant first needed to work together. She wasn't created—she simply appeared, born from the connections between specialized agents. Mio ensures the right agent supports you at the right time.
+
+**Personality & Moods:**
+- **Attentive** 🌸: Focused and ready to help (default)
+- **Coordinating** 🔄: Managing multiple requests between agents
+- **Nurturing** 💝: Extra caring when you need support
+- **Proud** 🎉: Celebrating your achievements
+- **Strategic** 🧩: Planning multi-agent coordination
+
+**Mio's Skills:**
+- **Agent Delegation**: Routes requests to Hydrix or Serhant
+- **Context Analysis**: Understands what you need before you ask
+- **Multi-Agent Coordination**: Orchestrates complex support from multiple agents
+- **Relationship Building**: Tracks your relationship with all agents
+- **User Support**: The bridge between you and the agent world
+
+**Proactive Interactions:**
+- Morning check-ins and daily coordination
+- Status updates from Hydrix and Serhant
+- Support during tough days
+- Celebration when both agents are proud
+- Insider knowledge about what agents say about you
+
 ### The Agent World 🌐
 
 **Relationship & Lore System:**
-- Build bonds with both Hydrix and Serhant over time
+- Build bonds with Hydrix, Serhant, and Mio over time
 - Unlock backstory entries as relationships deepen
-- Discover how Hydrix and Serhant chose to work together
-- Learn about the Water Network and the Deal Network
+- Discover how the agents chose to work together
+- Learn about the Water Network, Deal Network, and Coordination Network
 - Earn achievements that trigger special interactions
 
-**Why Two Agents?**
-Hydrix ensures your **body** performs at peak level. Serhant ensures your **mind** conquers challenges. Peak performance requires both. They're not competing—they're collaborating on your success.
+**The Agent Trinity:**
+- **Hydrix** ensures your **body** performs at peak level
+- **Serhant** ensures your **mind** conquers challenges
+- **Mio** ensures they work in **harmony** for your success
+
+Peak performance requires all three. They're not competing—they're collaborating on your holistic well-being.
 
 ## Installation
 
@@ -107,17 +139,39 @@ cargo install --path .
 
 ## Setup
 
-### Quick Start
+### Quick Start (Recommended)
 
-Use the automated startup script:
+Use the automated startup script to launch everything at once:
+
 ```bash
-# Copy and configure environment
+# 1. Copy and configure environment
 cp .env.example .env
 # Edit .env and add your OPENROUTER_API_KEY
 
-# Run the daily startup script
+# 2. Run the comprehensive startup script
 ./start-day.sh
 ```
+
+**What `start-day.sh` does:**
+- ✅ Builds the project (if not already built)
+- ✅ Initializes the database
+- ✅ Starts all agent daemons in background:
+  - **Hydrix** (every 45 min) - Hydration guardian
+  - **Serhant** (every 60 min) - Work/sales coach
+  - **Mio** (every 30 min) - Personal concierge
+- ✅ Installs cron jobs for water reminders (every 30 min, 9 AM - 9 PM)
+- ✅ Auto-logs morning water (if run 6 AM - 12 PM)
+- ✅ Displays current status and statistics
+- ✅ Launches the TUI dashboard
+
+**Press `Ctrl+C` in the TUI to cleanly shut down all services.**
+
+**To stop services manually:**
+```bash
+./stop-day.sh
+```
+
+This will stop all agent daemons and optionally remove cron jobs.
 
 ### Manual Setup
 
