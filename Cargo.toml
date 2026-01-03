@@ -11,7 +11,7 @@ license = "MIT"
 clap = { version = "4.5", features = ["derive", "env"] }
 
 # Async runtime
-tokio = { version = "1.42", features = ["full"] }
+tokio = { version = "1.49", features = ["full"] }
 
 # Database
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono"] }
