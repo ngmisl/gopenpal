@@ -17,18 +17,22 @@ This document tracks planned features, improvements, and technical tasks for Gop
 - [x] **Multi-Agent Daemon** - All 4 agents (Hydrix, Serhant, Mio, Karen) running via start-day.sh
 - [x] **Comprehensive Startup Scripts** - start-day.sh and stop-day.sh for full ecosystem management
 
-## In Progress 🚧
+## Recently Completed ✅
 
-### Security & Organization
-- [ ] **World Folder Structure** - Organize all data files in dedicated world directory
-  - Create .gopenpal_world/ for database and logs
-  - Update default paths in CLI
-  - Migrate existing data structure
-- [ ] **Path Sandboxing Security** - Restrict agent file access to workspace only
-  - Security module with path validation
+### Security & Organization (2026-01-03)
+- [x] **World Folder Structure** - Organize all data files in dedicated world directory
+  - Default database path: world/gopenpal.db
+  - Updated CLI default values
+  - All data contained within workspace
+- [x] **Path Sandboxing Security** - Restrict agent file access to workspace only
+  - Full security module with path validation
   - Canonicalization to prevent directory traversal
-  - Settings configuration for sandbox control
-  - Integration into file operations
+  - JSON-based settings configuration (configs/security.json)
+  - Integrated into main application with validation
+  - Comprehensive testing and documentation
+  - Blocks absolute paths outside sandbox
+  - Blocks parent directory escapes (../)
+  - Resolves and validates symlinks
 
 ## High Priority
 
