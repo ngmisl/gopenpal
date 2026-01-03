@@ -10,6 +10,7 @@ mod cron;
 mod db;
 mod error;
 mod openrouter;
+mod personality;
 mod reminder;
 mod security;
 mod tui;

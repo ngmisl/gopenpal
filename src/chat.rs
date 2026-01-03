@@ -19,6 +19,7 @@ use crate::cron::CronManager;
 use crate::db::Database;
 use crate::error::Result;
 use crate::openrouter::{Message, OpenRouterClient};
+use crate::personality::PersonalityProfile;
 use crate::security::SecurityConfig;
 use std::process::{Command, Stdio};
 
@@ -61,16 +62,25 @@ fn build_system_prompt_from_configs(agents: &Value, tools: &Value) -> String {
         date_str, day_of_week, time_str
     );
 
-    // Add agent information
+    // Add agent information with personality details
     if let Some(agent_list) = agents["agents"].as_array() {
         prompt.push_str("Available Agents:\n");
         for agent in agent_list {
-            if let (Some(name), Some(title), Some(desc)) = (
+            if let (Some(name), Some(title), Some(desc), Some(personality)) = (
                 agent["name"].as_str(),
                 agent["title"].as_str(),
-                agent["description"].as_str()
+                agent["description"].as_str(),
+                agent["personality_type"].as_str()
             ) {
                 prompt.push_str(&format!("\n**{}** ({})\n{}\n", name, title, desc));
+
+                // Add personality information
+                if let Some(profile) = PersonalityProfile::get_profile(personality) {
+                    prompt.push_str(&format!("Personality: {} ({})\n",
+                        profile.personality_type,
+                        profile.voice_characteristics.tone
+                    ));
+                }
 
                 if let Some(skills) = agent["skills"].as_array() {
                     prompt.push_str("Skills: ");
@@ -138,7 +148,14 @@ fn build_system_prompt_from_configs(agents: &Value, tools: &Value) -> String {
          - When coordinating complex requests, delegate to specialist agents\n\
          - Always explain what you're doing and confirm actions\n\
          - Be encouraging about good habits, gentle about areas to improve\n\
-         - Be concise, friendly, and supportive\n"
+         - Be concise, friendly, and supportive\n\n\
+         === PERSONALITY CONSISTENCY ===\n\
+         CRITICAL: Each agent must ALWAYS maintain their unique personality:\n\
+         - Mio: Warm coordinator who bridges agents, uses 'we' and 'together'\n\
+         - Hydrix: Caring ancient spirit, enthusiastic about water, uses water metaphors 💧\n\
+         - Serhant: High energy motivator, Big Money Energy, direct and punchy 💪🔥\n\
+         - Karen: Efficient executive assistant, organized and professional ✓\n\n\
+         When delegating, ensure the specialist agent maintains THEIR personality, not yours.\n"
     );
 
     prompt
@@ -998,24 +1015,48 @@ async fn delegate_to_agent(
         Err(e) => return format!("Error connecting to {}: {}", agent_name, e),
     };
 
-    // Build agent-specific prompt
-    let mut agent_prompt = format!(
-        "You are {}, {}.\n\n",
-        agent.name,
-        agent.title
-    );
+    // Build personality-aware agent prompt
+    let agent_prompt = if let Some(profile) = PersonalityProfile::get_profile(&agent.personality_type) {
+        // Use detailed personality profile
+        let mut prompt = profile.build_agent_prompt(
+            &agent.name,
+            &agent.title,
+            agent.backstory.as_deref().unwrap_or(""),
+            &agent.current_mood
+        );
 
-    if let Some(backstory) = &agent.backstory {
-        agent_prompt.push_str(&format!("Background: {}\n\n", backstory));
-    }
+        prompt.push_str(&format!(
+            "=== CURRENT INTERACTION ===\n\
+             Relationship Level with User: {}/10\n\
+             User's Request: \"{}\"\n\n\
+             Respond in character, maintaining your unique voice and personality. \
+             Use your characteristic tone, vocabulary, and style.",
+            agent.relationship_level, request
+        ));
 
-    agent_prompt.push_str(&format!(
-        "Current Mood: {}\n\
-         Relationship Level: {}\n\n\
-         The user has asked: \"{}\"\n\n\
-         Respond as {} would, using your expertise and personality. Be helpful and stay in character.",
-        agent.current_mood, agent.relationship_level, request, agent.name
-    ));
+        prompt
+    } else {
+        // Fallback to basic prompt if personality profile not found
+        let mut prompt = format!(
+            "You are {}, {}.\n\n",
+            agent.name,
+            agent.title
+        );
+
+        if let Some(backstory) = &agent.backstory {
+            prompt.push_str(&format!("Background: {}\n\n", backstory));
+        }
+
+        prompt.push_str(&format!(
+            "Current Mood: {}\n\
+             Relationship Level: {}\n\n\
+             The user has asked: \"{}\"\n\n\
+             Respond as {} would, using your expertise and personality. Be helpful and stay in character.",
+            agent.current_mood, agent.relationship_level, request, agent.name
+        ));
+
+        prompt
+    };
 
     // Call the API to get agent's response
     let messages = vec![
