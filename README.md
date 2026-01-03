@@ -9,8 +9,13 @@ GopenPal is a CLI application that helps you maintain healthy work habits throug
 - **Water Intake Tracking**: Log and monitor your daily water consumption
 - **Smart Reminders**: Desktop notifications during work hours to remind you to stay hydrated
 - **AI Chat Assistant**: Interactive chat with various LLM models through OpenRouter API
+  - **Statistics & Insights**: AI analyzes your water intake patterns and provides personalized recommendations
+  - **Pattern Analysis**: Discover your drinking habits by hour, day, and week
+  - **Cron Management**: AI can set up and manage automated reminders through chat
+- **Comprehensive Analytics**: Track daily totals, hourly patterns, weekly trends, and reminder effectiveness
 - **Persistent History**: All data stored locally in SQLite database
 - **Configurable**: Customize reminder intervals, work hours, and AI models
+- **Terminal UI**: Rich interactive dashboard for easy management
 
 ## Installation
 
@@ -86,8 +91,11 @@ gopenpal tui
 - 📊 **Dashboard**: Overview of your water intake with progress bar
 - 💧 **Water**: Log water intake interactively (press `w` to edit)
 - 💬 **Chat**: Interactive AI chat interface (press `c` to chat)
+  - 📊 **AI Statistics & Insights**: Ask AI to analyze your water intake patterns
+    - Examples: "How am I doing?", "Show my progress", "What are my patterns?"
   - 🤖 **AI Cron Management**: Ask AI to set up/modify/remove cron jobs
-  - Example: "Set up reminders every 30 minutes"
+    - Example: "Set up reminders every 30 minutes"
+  - 🎯 **Personalized Recommendations**: AI provides insights based on your data
 - ⏰ **Cron**: Manage automated reminders with visual presets
   - Browse schedule presets with `↑/↓`
   - Install/update with `Enter`
@@ -173,9 +181,19 @@ gopenpal chat
 gopenpal chat interactive --model "anthropic/claude-3.5-sonnet"
 ```
 
+**AI Capabilities:**
+
+The AI assistant has access to your water intake data and can provide:
+- **Statistics & Insights**: Ask "How am I doing?" or "Show my progress for the last week"
+- **Pattern Analysis**: Ask "When do I drink the most water?" or "What are my drinking patterns?"
+- **Reminder Effectiveness**: Ask "Are the reminders helping?" to see how well your cron jobs work
+- **Personalized Recommendations**: Get advice based on your actual habits and patterns
+- **Cron Management**: Ask "Set up reminders every hour" to manage automated reminders
+
 Send a single message:
 ```bash
 gopenpal chat send "How much water should I drink daily?"
+gopenpal chat send "Show me my water intake patterns"
 ```
 
 View chat history:
@@ -236,18 +254,23 @@ gopenpal/
 ├── src/
 │   ├── main.rs          # Entry point and command handling
 │   ├── cli.rs           # CLI argument definitions
-│   ├── db.rs            # Database layer (SQLite)
+│   ├── db.rs            # Database layer (SQLite) with statistics
 │   ├── error.rs         # Error types
 │   ├── openrouter.rs    # OpenRouter API client
 │   ├── reminder.rs      # Water reminder service
-│   └── chat.rs          # AI chat functionality
-├── migrations/          # Database schema
+│   ├── chat.rs          # AI chat with stats & cron tools
+│   ├── cron.rs          # Cron job management
+│   └── tui.rs           # Terminal user interface
+├── migrations/          # Database schema & analytics views
 └── Cargo.toml          # Dependencies
 ```
 
 ## Roadmap
 
-- [ ] Water intake history visualization
+- [x] Water intake statistics and pattern analysis
+- [x] AI-powered insights and recommendations
+- [x] Cron job management via TUI and AI
+- [ ] Water intake history visualization (charts/graphs)
 - [ ] Custom health metrics tracking
 - [ ] Work session tracking and break reminders
 - [ ] Integration with health APIs (Fitbit, Apple Health)

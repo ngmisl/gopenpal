@@ -60,9 +60,15 @@ impl Database {
     ///
     /// Returns `AppError::Database` if migrations fail
     pub async fn migrate(&self) -> Result<()> {
-        // Read and execute the migration file
+        // Read and execute the migration files
         let migration_sql = include_str!("../migrations/20260103_initial_schema.sql");
         sqlx::query(migration_sql).execute(&self.pool).await?;
+
+        let activity_logging_sql = include_str!("../migrations/20260103_activity_logging.sql");
+        sqlx::query(activity_logging_sql)
+            .execute(&self.pool)
+            .await?;
+
         Ok(())
     }
 
@@ -273,6 +279,319 @@ impl Database {
             .await?;
         Ok(())
     }
+
+    /// Log an activity event.
+    ///
+    /// # Arguments
+    ///
+    /// * `activity_type` - Type of activity
+    /// * `details` - Optional details about the activity
+    /// * `metadata` - Optional JSON metadata
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Database` if insert fails
+    #[allow(dead_code)]
+    pub async fn log_activity(
+        &self,
+        activity_type: &str,
+        details: Option<&str>,
+        metadata: Option<&str>,
+    ) -> Result<i64> {
+        let result = sqlx::query(
+            "INSERT INTO activity_log (activity_type, details, metadata) VALUES (?, ?, ?)",
+        )
+        .bind(activity_type)
+        .bind(details)
+        .bind(metadata)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.last_insert_rowid())
+    }
+
+    /// Log a reminder event.
+    ///
+    /// # Arguments
+    ///
+    /// * `reminder_type` - Type of reminder (cron, manual, foreground)
+    /// * `action_taken` - Whether the reminder was acted upon
+    /// * `water_intake_id` - Optional ID of water intake record if acted upon
+    /// * `response_time_seconds` - Optional response time
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Database` if insert fails
+    #[allow(dead_code)]
+    pub async fn log_reminder_event(
+        &self,
+        reminder_type: &str,
+        action_taken: bool,
+        water_intake_id: Option<i64>,
+        response_time_seconds: Option<i64>,
+    ) -> Result<i64> {
+        let result = sqlx::query(
+            r#"
+            INSERT INTO reminder_events
+            (reminder_type, action_taken, water_intake_id, response_time_seconds)
+            VALUES (?, ?, ?, ?)
+            "#,
+        )
+        .bind(reminder_type)
+        .bind(action_taken)
+        .bind(water_intake_id)
+        .bind(response_time_seconds)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.last_insert_rowid())
+    }
+
+    /// Get daily water statistics for the last N days.
+    ///
+    /// # Arguments
+    ///
+    /// * `days` - Number of days to include
+    ///
+    /// # Returns
+    ///
+    /// Vector of `DailyWaterStats`
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Database` if query fails
+    pub async fn get_daily_water_stats(&self, days: i64) -> Result<Vec<DailyWaterStats>> {
+        let stats = sqlx::query_as::<_, DailyWaterStats>(
+            r#"
+            SELECT
+                date,
+                intake_count,
+                total_ml,
+                avg_ml,
+                min_ml,
+                max_ml
+            FROM daily_water_stats
+            WHERE date >= DATE('now', ? || ' days')
+            ORDER BY date DESC
+            "#,
+        )
+        .bind(format!("-{}", days))
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(stats)
+    }
+
+    /// Get hourly drinking patterns.
+    ///
+    /// # Returns
+    ///
+    /// Vector of `HourlyPattern` showing which hours user drinks most
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Database` if query fails
+    pub async fn get_hourly_patterns(&self) -> Result<Vec<HourlyPattern>> {
+        let patterns = sqlx::query_as::<_, HourlyPattern>(
+            r#"
+            SELECT hour, intake_count, total_ml, avg_ml
+            FROM hourly_patterns
+            ORDER BY hour
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(patterns)
+    }
+
+    /// Get weekly drinking patterns.
+    ///
+    /// # Returns
+    ///
+    /// Vector of `WeeklyPattern` showing which days user drinks most
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Database` if query fails
+    pub async fn get_weekly_patterns(&self) -> Result<Vec<WeeklyPattern>> {
+        let patterns = sqlx::query_as::<_, WeeklyPattern>(
+            r#"
+            SELECT day_name, day_num, intake_count, total_ml, avg_ml
+            FROM weekly_patterns
+            ORDER BY day_num
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(patterns)
+    }
+
+    /// Get reminder effectiveness statistics.
+    ///
+    /// # Returns
+    ///
+    /// Vector of `ReminderEffectiveness` stats by reminder type
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Database` if query fails
+    pub async fn get_reminder_effectiveness(&self) -> Result<Vec<ReminderEffectiveness>> {
+        let stats = sqlx::query_as::<_, ReminderEffectiveness>(
+            r#"
+            SELECT
+                reminder_type,
+                total_reminders,
+                actions_taken,
+                effectiveness_percentage,
+                avg_response_seconds
+            FROM reminder_effectiveness
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(stats)
+    }
+
+    /// Get recent activity log entries.
+    ///
+    /// # Arguments
+    ///
+    /// * `days` - Number of days to include
+    /// * `activity_type` - Optional filter by activity type
+    ///
+    /// # Returns
+    ///
+    /// Vector of `ActivityLog` entries
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Database` if query fails
+    #[allow(dead_code)]
+    pub async fn get_activity_log(
+        &self,
+        days: i64,
+        activity_type: Option<&str>,
+    ) -> Result<Vec<ActivityLog>> {
+        let logs = if let Some(activity_type) = activity_type {
+            sqlx::query_as::<_, ActivityLog>(
+                r#"
+                SELECT id, timestamp, activity_type, details, metadata
+                FROM activity_log
+                WHERE timestamp >= DATETIME('now', ? || ' days')
+                  AND activity_type = ?
+                ORDER BY timestamp DESC
+                "#,
+            )
+            .bind(format!("-{}", days))
+            .bind(activity_type)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, ActivityLog>(
+                r#"
+                SELECT id, timestamp, activity_type, details, metadata
+                FROM activity_log
+                WHERE timestamp >= DATETIME('now', ? || ' days')
+                ORDER BY timestamp DESC
+                "#,
+            )
+            .bind(format!("-{}", days))
+            .fetch_all(&self.pool)
+            .await?
+        };
+
+        Ok(logs)
+    }
+
+    /// Get comprehensive water intake statistics and recommendations.
+    ///
+    /// # Arguments
+    ///
+    /// * `days` - Number of days to analyze
+    ///
+    /// # Returns
+    ///
+    /// Formatted string with statistics and AI-friendly insights
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Database` if queries fail
+    pub async fn get_statistics_summary(&self, days: i64) -> Result<String> {
+        let daily_stats = self.get_daily_water_stats(days).await?;
+        let hourly_patterns = self.get_hourly_patterns().await?;
+        let weekly_patterns = self.get_weekly_patterns().await?;
+        let effectiveness = self.get_reminder_effectiveness().await?;
+
+        let mut summary = format!("=== Water Intake Statistics (Last {} days) ===\n\n", days);
+
+        // Daily statistics
+        summary.push_str("Daily Totals:\n");
+        for stat in &daily_stats {
+            summary.push_str(&format!(
+                "  {} - {}ml ({} times, avg: {}ml per intake)\n",
+                stat.date, stat.total_ml, stat.intake_count, stat.avg_ml
+            ));
+        }
+
+        // Overall averages
+        if !daily_stats.is_empty() {
+            let total_days = daily_stats.len() as i64;
+            let total_intake: i64 = daily_stats.iter().map(|s| s.total_ml).sum();
+            let avg_daily = total_intake / total_days;
+            summary.push_str(&format!(
+                "\nOverall Average: {}ml per day ({} days)\n",
+                avg_daily, total_days
+            ));
+        }
+
+        // Hourly patterns
+        summary.push_str("\nHourly Patterns:\n");
+        let top_hours: Vec<_> = {
+            let mut hours = hourly_patterns.clone();
+            hours.sort_by(|a, b| b.intake_count.cmp(&a.intake_count));
+            hours.into_iter().take(5).collect()
+        };
+        for pattern in &top_hours {
+            summary.push_str(&format!(
+                "  {}:00 - {} intakes, {}ml total\n",
+                pattern.hour, pattern.intake_count, pattern.total_ml
+            ));
+        }
+
+        // Weekly patterns
+        summary.push_str("\nWeekly Patterns:\n");
+        for pattern in &weekly_patterns {
+            summary.push_str(&format!(
+                "  {} - {} intakes, {}ml total (avg: {}ml)\n",
+                pattern.day_name, pattern.intake_count, pattern.total_ml, pattern.avg_ml
+            ));
+        }
+
+        // Reminder effectiveness
+        if !effectiveness.is_empty() {
+            summary.push_str("\nReminder Effectiveness:\n");
+            for eff in &effectiveness {
+                summary.push_str(&format!(
+                    "  {} - {:.1}% effective ({}/{} acted upon)\n",
+                    eff.reminder_type,
+                    eff.effectiveness_percentage,
+                    eff.actions_taken,
+                    eff.total_reminders
+                ));
+                if let Some(avg_resp) = eff.avg_response_seconds {
+                    summary.push_str(&format!(
+                        "    Avg response time: {}s\n",
+                        avg_resp
+                    ));
+                }
+            }
+        }
+
+        Ok(summary)
+    }
 }
 
 /// Water intake record.
@@ -303,6 +622,57 @@ pub struct ChatMessage {
     pub content: String,
     pub model: Option<String>,
     pub tokens_used: Option<i64>,
+}
+
+/// Activity log record.
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[allow(dead_code)]
+pub struct ActivityLog {
+    pub id: i64,
+    pub timestamp: DateTime<Utc>,
+    pub activity_type: String,
+    pub details: Option<String>,
+    pub metadata: Option<String>,
+}
+
+/// Daily water intake statistics.
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct DailyWaterStats {
+    pub date: String,
+    pub intake_count: i64,
+    pub total_ml: i64,
+    pub avg_ml: i64,
+    pub min_ml: i64,
+    pub max_ml: i64,
+}
+
+/// Hourly drinking pattern.
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct HourlyPattern {
+    pub hour: i64,
+    pub intake_count: i64,
+    pub total_ml: i64,
+    pub avg_ml: i64,
+}
+
+/// Weekly drinking pattern.
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct WeeklyPattern {
+    pub day_name: String,
+    pub day_num: i64,
+    pub intake_count: i64,
+    pub total_ml: i64,
+    pub avg_ml: i64,
+}
+
+/// Reminder effectiveness statistics.
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ReminderEffectiveness {
+    pub reminder_type: String,
+    pub total_reminders: i64,
+    pub actions_taken: i64,
+    pub effectiveness_percentage: f64,
+    pub avg_response_seconds: Option<f64>,
 }
 
 #[cfg(test)]

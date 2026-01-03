@@ -68,8 +68,23 @@ impl ChatSession {
                 "You are GopenPal, a helpful AI assistant focused on health and productivity. \
                  You help users maintain healthy habits like staying hydrated, taking breaks, \
                  and managing their work-life balance.\n\n\
-                 You have access to the CRON_TOOL to manage automated water reminders.\n\n\
-                 CRON_TOOL commands (output these EXACTLY as shown when user requests cron changes):\n\
+                 You have access to two primary tools:\n\n\
+                 1. STATS_TOOL - Access water intake statistics and patterns\n\
+                 2. CRON_TOOL - Manage automated water reminders\n\n\
+                 === STATS_TOOL (use FIRST when user asks about their habits, progress, or patterns) ===\n\
+                 Commands (output these EXACTLY as shown):\n\
+                 - [STATS:SUMMARY:7] - Get 7-day summary with all statistics\n\
+                 - [STATS:SUMMARY:30] - Get 30-day summary\n\
+                 - [STATS:HOURLY] - Get hourly drinking patterns\n\
+                 - [STATS:WEEKLY] - Get weekly patterns\n\
+                 - [STATS:EFFECTIVENESS] - Get reminder effectiveness stats\n\n\
+                 Use STATS_TOOL when users ask:\n\
+                 - \"How am I doing?\" / \"Show my progress\"\n\
+                 - \"What are my patterns?\" / \"When do I drink most?\"\n\
+                 - \"Are the reminders helping?\"\n\
+                 - Any questions about their water intake history or habits\n\n\
+                 === CRON_TOOL ===\n\
+                 Commands (output these EXACTLY as shown):\n\
                  - [CRON:INSTALL:*/30 * * * *] - Install cron job with schedule\n\
                  - [CRON:REMOVE] - Remove cron job\n\
                  - [CRON:STATUS] - Check cron job status\n\n\
@@ -79,9 +94,12 @@ impl ChatSession {
                  - 0 * * * * (every hour)\n\
                  - 0 */2 * * * (every 2 hours)\n\
                  - */30 9-17 * * 1-5 (every 30min, work hours only)\n\n\
-                 When user asks to set up/change/remove reminders, use the CRON_TOOL.\n\
-                 Always explain what you're doing and confirm the action.\n\
-                 Be concise, friendly, and supportive in all other responses.",
+                 === RESPONSE GUIDELINES ===\n\
+                 - Use STATS_TOOL to analyze data, then provide insights and recommendations\n\
+                 - When you see statistics, interpret them and suggest improvements\n\
+                 - Be encouraging about good habits, gentle about areas to improve\n\
+                 - Always explain what you're doing and confirm actions\n\
+                 - Be concise, friendly, and supportive",
             );
             messages.insert(0, system_msg);
         }
@@ -136,14 +154,24 @@ impl ChatSession {
 
             let assistant_message = &response.choices[0].message;
 
-            // Process and execute cron commands
-            let (display_content, cron_result) = process_cron_commands(&assistant_message.content);
+            // Process and execute stats commands first, then cron commands
+            let (content_after_stats, stats_result) =
+                process_stats_commands(&assistant_message.content, &self.db).await;
+            let (display_content, cron_result) = process_cron_commands(&content_after_stats);
+
             println!("{}", display_content);
 
-            if let Some(result) = cron_result {
+            if let Some(ref result) = stats_result {
+                print_colored("\n[STATS] ", Color::Magenta)?;
+                println!("{}\n", result);
+            }
+
+            if let Some(ref result) = cron_result {
                 print_colored("\n[CRON] ", Color::Yellow)?;
                 println!("{}\n", result);
-            } else {
+            }
+
+            if stats_result.is_none() && cron_result.is_none() {
                 println!();
             }
 
@@ -186,8 +214,23 @@ impl ChatSession {
                 "You are GopenPal, a helpful AI assistant focused on health and productivity. \
                  You help users maintain healthy habits like staying hydrated, taking breaks, \
                  and managing their work-life balance.\n\n\
-                 You have access to the CRON_TOOL to manage automated water reminders.\n\n\
-                 CRON_TOOL commands (output these EXACTLY as shown when user requests cron changes):\n\
+                 You have access to two primary tools:\n\n\
+                 1. STATS_TOOL - Access water intake statistics and patterns\n\
+                 2. CRON_TOOL - Manage automated water reminders\n\n\
+                 === STATS_TOOL (use FIRST when user asks about their habits, progress, or patterns) ===\n\
+                 Commands (output these EXACTLY as shown):\n\
+                 - [STATS:SUMMARY:7] - Get 7-day summary with all statistics\n\
+                 - [STATS:SUMMARY:30] - Get 30-day summary\n\
+                 - [STATS:HOURLY] - Get hourly drinking patterns\n\
+                 - [STATS:WEEKLY] - Get weekly patterns\n\
+                 - [STATS:EFFECTIVENESS] - Get reminder effectiveness stats\n\n\
+                 Use STATS_TOOL when users ask:\n\
+                 - \"How am I doing?\" / \"Show my progress\"\n\
+                 - \"What are my patterns?\" / \"When do I drink most?\"\n\
+                 - \"Are the reminders helping?\"\n\
+                 - Any questions about their water intake history or habits\n\n\
+                 === CRON_TOOL ===\n\
+                 Commands (output these EXACTLY as shown):\n\
                  - [CRON:INSTALL:*/30 * * * *] - Install cron job with schedule\n\
                  - [CRON:REMOVE] - Remove cron job\n\
                  - [CRON:STATUS] - Check cron job status\n\n\
@@ -197,9 +240,12 @@ impl ChatSession {
                  - 0 * * * * (every hour)\n\
                  - 0 */2 * * * (every 2 hours)\n\
                  - */30 9-17 * * 1-5 (every 30min, work hours only)\n\n\
-                 When user asks to set up/change/remove reminders, use the CRON_TOOL.\n\
-                 Always explain what you're doing and confirm the action.\n\
-                 Be concise, friendly, and supportive in all other responses.",
+                 === RESPONSE GUIDELINES ===\n\
+                 - Use STATS_TOOL to analyze data, then provide insights and recommendations\n\
+                 - When you see statistics, interpret them and suggest improvements\n\
+                 - Be encouraging about good habits, gentle about areas to improve\n\
+                 - Always explain what you're doing and confirm actions\n\
+                 - Be concise, friendly, and supportive",
             ),
             Message::user(message),
         ];
@@ -217,15 +263,19 @@ impl ChatSession {
         let assistant_message = &response.choices[0].message;
         messages.push(assistant_message.clone());
 
-        // Process cron commands and get cleaned response
-        let (cleaned_content, cron_result) = process_cron_commands(&assistant_message.content);
+        // Process stats commands first, then cron commands
+        let (content_after_stats, stats_result) =
+            process_stats_commands(&assistant_message.content, &self.db).await;
+        let (cleaned_content, cron_result) = process_cron_commands(&content_after_stats);
 
-        // Append cron result to response if any
-        let full_response = if let Some(result) = cron_result {
-            format!("{}\n\n[CRON] {}", cleaned_content, result)
-        } else {
-            cleaned_content
-        };
+        // Build full response with both stats and cron results
+        let mut full_response = cleaned_content;
+        if let Some(result) = stats_result {
+            full_response.push_str(&format!("\n\n[STATS] {}", result));
+        }
+        if let Some(result) = cron_result {
+            full_response.push_str(&format!("\n\n[CRON] {}", result));
+        }
 
         // Save assistant message
         let tokens_used = response.usage.as_ref().map(|u| u.total_tokens as i64);
@@ -295,6 +345,112 @@ fn print_colored(text: &str, color: Color) -> io::Result<()> {
         ResetColor
     )?;
     Ok(())
+}
+
+/// Process stats commands in AI response.
+///
+/// # Arguments
+///
+/// * `content` - The AI's response content
+/// * `db` - Database connection for querying statistics
+///
+/// # Returns
+///
+/// Tuple of (cleaned_content, optional_stats_result)
+async fn process_stats_commands(content: &str, db: &Database) -> (String, Option<String>) {
+    let mut result_message = None;
+    let mut cleaned = content.to_string();
+
+    // Check for STATS:SUMMARY command with days parameter
+    if let Some(start) = content.find("[STATS:SUMMARY:") {
+        if let Some(end) = content[start..].find(']') {
+            let command = &content[start..start + end + 1];
+            let days_str = command
+                .trim_start_matches("[STATS:SUMMARY:")
+                .trim_end_matches(']');
+
+            if let Ok(days) = days_str.parse::<i64>() {
+                let result = match db.get_statistics_summary(days).await {
+                    Ok(summary) => summary,
+                    Err(e) => format!("Error fetching statistics: {}", e),
+                };
+                result_message = Some(result);
+                cleaned = cleaned.replace(command, "");
+            }
+        }
+    }
+
+    // Check for STATS:HOURLY command
+    if content.contains("[STATS:HOURLY]") {
+        let result = match db.get_hourly_patterns().await {
+            Ok(patterns) => {
+                let mut output = "=== Hourly Drinking Patterns ===\n\n".to_string();
+                for pattern in &patterns {
+                    output.push_str(&format!(
+                        "{}:00 - {} intakes, {}ml total (avg: {}ml)\n",
+                        pattern.hour, pattern.intake_count, pattern.total_ml, pattern.avg_ml
+                    ));
+                }
+                output
+            }
+            Err(e) => format!("Error fetching hourly patterns: {}", e),
+        };
+        result_message = Some(result);
+        cleaned = cleaned.replace("[STATS:HOURLY]", "");
+    }
+
+    // Check for STATS:WEEKLY command
+    if content.contains("[STATS:WEEKLY]") {
+        let result = match db.get_weekly_patterns().await {
+            Ok(patterns) => {
+                let mut output = "=== Weekly Drinking Patterns ===\n\n".to_string();
+                for pattern in &patterns {
+                    output.push_str(&format!(
+                        "{} - {} intakes, {}ml total (avg: {}ml)\n",
+                        pattern.day_name, pattern.intake_count, pattern.total_ml, pattern.avg_ml
+                    ));
+                }
+                output
+            }
+            Err(e) => format!("Error fetching weekly patterns: {}", e),
+        };
+        result_message = Some(result);
+        cleaned = cleaned.replace("[STATS:WEEKLY]", "");
+    }
+
+    // Check for STATS:EFFECTIVENESS command
+    if content.contains("[STATS:EFFECTIVENESS]") {
+        let result = match db.get_reminder_effectiveness().await {
+            Ok(stats) => {
+                let mut output = "=== Reminder Effectiveness ===\n\n".to_string();
+                if stats.is_empty() {
+                    output.push_str("No reminder data available yet.\n");
+                } else {
+                    for eff in &stats {
+                        output.push_str(&format!(
+                            "{} - {:.1}% effective ({}/{} acted upon)\n",
+                            eff.reminder_type,
+                            eff.effectiveness_percentage,
+                            eff.actions_taken,
+                            eff.total_reminders
+                        ));
+                        if let Some(avg_resp) = eff.avg_response_seconds {
+                            output.push_str(&format!("  Avg response time: {}s\n", avg_resp));
+                        }
+                    }
+                }
+                output
+            }
+            Err(e) => format!("Error fetching effectiveness stats: {}", e),
+        };
+        result_message = Some(result);
+        cleaned = cleaned.replace("[STATS:EFFECTIVENESS]", "");
+    }
+
+    // Clean up any extra whitespace
+    cleaned = cleaned.trim().to_string();
+
+    (cleaned, result_message)
 }
 
 /// Process cron commands in AI response.
