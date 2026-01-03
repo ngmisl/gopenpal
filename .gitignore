@@ -53,3 +53,8 @@ web/pkg/
 # Editor/IDE
 # .idea/
 # .vscode/
+
+
+# Added by cargo
+
+/target
