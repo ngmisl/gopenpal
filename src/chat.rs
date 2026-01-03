@@ -13,6 +13,7 @@ use std::fs;
 use std::io::{self, Write};
 use tracing::info;
 
+use crate::agents::AgentSystem;
 use crate::cron::CronManager;
 use crate::db::Database;
 use crate::error::Result;
@@ -297,10 +298,12 @@ impl ChatSession {
 
             let assistant_message = &response.choices[0].message;
 
-            // Process and execute stats commands first, then cron commands
+            // Process and execute stats commands first, then cron, then delegation
             let (content_after_stats, stats_result) =
                 process_stats_commands(&assistant_message.content, &self.db).await;
-            let (display_content, cron_result) = process_cron_commands(&content_after_stats);
+            let (content_after_cron, cron_result) = process_cron_commands(&content_after_stats);
+            let (display_content, delegate_result) =
+                process_delegate_commands(&content_after_cron, &self.db, &self.client, &self.model).await;
 
             println!("{}", display_content);
 
@@ -314,7 +317,12 @@ impl ChatSession {
                 println!("{}\n", result);
             }
 
-            if stats_result.is_none() && cron_result.is_none() {
+            if let Some(ref result) = delegate_result {
+                print_colored("\n[DELEGATE] ", Color::Cyan)?;
+                println!("{}\n", result);
+            }
+
+            if stats_result.is_none() && cron_result.is_none() && delegate_result.is_none() {
                 println!();
             }
 
@@ -376,18 +384,23 @@ impl ChatSession {
         let assistant_message = &response.choices[0].message;
         messages.push(assistant_message.clone());
 
-        // Process stats commands first, then cron commands
+        // Process stats commands first, then cron, then delegation
         let (content_after_stats, stats_result) =
             process_stats_commands(&assistant_message.content, &self.db).await;
-        let (cleaned_content, cron_result) = process_cron_commands(&content_after_stats);
+        let (content_after_cron, cron_result) = process_cron_commands(&content_after_stats);
+        let (cleaned_content, delegate_result) =
+            process_delegate_commands(&content_after_cron, &self.db, &self.client, &self.model).await;
 
-        // Build full response with both stats and cron results
+        // Build full response with stats, cron, and delegation results
         let mut full_response = cleaned_content;
         if let Some(result) = stats_result {
             full_response.push_str(&format!("\n\n[STATS] {}", result));
         }
         if let Some(result) = cron_result {
             full_response.push_str(&format!("\n\n[CRON] {}", result));
+        }
+        if let Some(result) = delegate_result {
+            full_response.push_str(&format!("\n\n[DELEGATE] {}", result));
         }
 
         // Save assistant message
@@ -636,6 +649,159 @@ fn process_cron_commands(content: &str) -> (String, Option<String>) {
     cleaned = cleaned.trim().to_string();
 
     (cleaned, result_message)
+}
+
+/// Process delegation commands in AI response.
+///
+/// # Arguments
+///
+/// * `content` - The AI's response content
+/// * `db` - Database connection
+/// * `client` - OpenRouter client for API calls
+/// * `model` - Model to use for delegated responses
+///
+/// # Returns
+///
+/// Tuple of (cleaned_content, optional_delegate_result)
+async fn process_delegate_commands(
+    content: &str,
+    db: &Database,
+    client: &OpenRouterClient,
+    model: &str,
+) -> (String, Option<String>) {
+    let mut result_message = None;
+    let mut cleaned = content.to_string();
+
+    // Check for DELEGATE:HYDRIX command
+    if let Some(start) = content.find("[DELEGATE:HYDRIX:") {
+        if let Some(end) = content[start..].find(']') {
+            let command = &content[start..start + end + 1];
+            let request = command
+                .trim_start_matches("[DELEGATE:HYDRIX:")
+                .trim_end_matches(']');
+
+            let result = delegate_to_agent("Hydrix", request, db, client, model).await;
+            result_message = Some(result);
+            cleaned = cleaned.replace(command, "");
+        }
+    }
+
+    // Check for DELEGATE:SERHANT command
+    if let Some(start) = content.find("[DELEGATE:SERHANT:") {
+        if let Some(end) = content[start..].find(']') {
+            let command = &content[start..start + end + 1];
+            let request = command
+                .trim_start_matches("[DELEGATE:SERHANT:")
+                .trim_end_matches(']');
+
+            let result = delegate_to_agent("Serhant", request, db, client, model).await;
+            result_message = Some(result);
+            cleaned = cleaned.replace(command, "");
+        }
+    }
+
+    // Check for DELEGATE:KAREN command
+    if let Some(start) = content.find("[DELEGATE:KAREN:") {
+        if let Some(end) = content[start..].find(']') {
+            let command = &content[start..start + end + 1];
+            let request = command
+                .trim_start_matches("[DELEGATE:KAREN:")
+                .trim_end_matches(']');
+
+            let result = delegate_to_agent("Karen", request, db, client, model).await;
+            result_message = Some(result);
+            cleaned = cleaned.replace(command, "");
+        }
+    }
+
+    // Check for DELEGATE:BOTH command (coordinate multiple agents)
+    if let Some(start) = content.find("[DELEGATE:BOTH:") {
+        if let Some(end) = content[start..].find(']') {
+            let command = &content[start..start + end + 1];
+            let request = command
+                .trim_start_matches("[DELEGATE:BOTH:")
+                .trim_end_matches(']');
+
+            // Get responses from both Hydrix and Serhant
+            let hydrix_response = delegate_to_agent("Hydrix", request, db, client, model).await;
+            let serhant_response = delegate_to_agent("Serhant", request, db, client, model).await;
+
+            let result = format!(
+                "🌊 Hydrix:\n{}\n\n⚡ Serhant:\n{}",
+                hydrix_response, serhant_response
+            );
+            result_message = Some(result);
+            cleaned = cleaned.replace(command, "");
+        }
+    }
+
+    // Clean up any extra whitespace
+    cleaned = cleaned.trim().to_string();
+
+    (cleaned, result_message)
+}
+
+/// Delegate a request to a specific agent.
+async fn delegate_to_agent(
+    agent_name: &str,
+    request: &str,
+    db: &Database,
+    client: &OpenRouterClient,
+    model: &str,
+) -> String {
+    let agent_system = AgentSystem::new(db.clone());
+
+    // Get the agent details
+    let agent = match agent_system.get_agent(agent_name).await {
+        Ok(Some(a)) => a,
+        Ok(None) => return format!("{} is not available right now.", agent_name),
+        Err(e) => return format!("Error connecting to {}: {}", agent_name, e),
+    };
+
+    // Build agent-specific prompt
+    let mut agent_prompt = format!(
+        "You are {}, {}.\n\n",
+        agent.name,
+        agent.title
+    );
+
+    if let Some(backstory) = &agent.backstory {
+        agent_prompt.push_str(&format!("Background: {}\n\n", backstory));
+    }
+
+    agent_prompt.push_str(&format!(
+        "Current Mood: {}\n\
+         Relationship Level: {}\n\n\
+         The user has asked: \"{}\"\n\n\
+         Respond as {} would, using your expertise and personality. Be helpful and stay in character.",
+        agent.current_mood, agent.relationship_level, request, agent.name
+    ));
+
+    // Call the API to get agent's response
+    let messages = vec![
+        Message {
+            role: "system".to_string(),
+            content: agent_prompt,
+        },
+        Message {
+            role: "user".to_string(),
+            content: request.to_string(),
+        },
+    ];
+
+    match client.chat_completion(model, messages, Some(500)).await {
+        Ok(response) => {
+            let reply = response.choices[0].message.content.clone();
+
+            // Log the interaction
+            let _ = agent_system
+                .log_interaction(agent_name, "delegation", &reply, &agent.current_mood, 2)
+                .await;
+
+            reply
+        }
+        Err(e) => format!("Error getting response from {}: {}", agent_name, e),
+    }
 }
 
 #[cfg(test)]
