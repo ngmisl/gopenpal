@@ -113,6 +113,108 @@
       ]
     },
     {
+      "name": "TASK_TOOL",
+      "category": "productivity",
+      "description": "Manage tasks, reminders, and context for productivity tracking",
+      "access": ["Mio", "Karen"],
+      "priority": "primary",
+      "usage_notes": "Karen's primary tool for task management and productivity",
+      "commands": [
+        {
+          "syntax": "[TASK:CREATE:{title}|{priority}|{due_date}]",
+          "description": "Create a new task",
+          "parameters": {
+            "title": "Task title/description",
+            "priority": "low, medium, high, urgent",
+            "due_date": "Optional due date (YYYY-MM-DD)"
+          },
+          "examples": [
+            "[TASK:CREATE:Call client about proposal|high|2026-01-05]",
+            "[TASK:CREATE:Review code PR|medium]"
+          ],
+          "output": "Task created with ID and confirmation"
+        },
+        {
+          "syntax": "[TASK:LIST:{filter}]",
+          "description": "List tasks by filter",
+          "parameters": {
+            "filter": "all, pending, completed, today, overdue, high-priority"
+          },
+          "examples": [
+            "[TASK:LIST:pending]",
+            "[TASK:LIST:high-priority]",
+            "[TASK:LIST:today]"
+          ],
+          "output": "Shows filtered task list with details"
+        },
+        {
+          "syntax": "[TASK:COMPLETE:{task_id}]",
+          "description": "Mark task as completed",
+          "parameters": {
+            "task_id": "ID of the task to complete"
+          },
+          "examples": [
+            "[TASK:COMPLETE:123]"
+          ],
+          "output": "Task marked complete with celebration"
+        },
+        {
+          "syntax": "[TASK:UPDATE:{task_id}|{field}|{value}]",
+          "description": "Update task field",
+          "parameters": {
+            "task_id": "ID of the task",
+            "field": "title, priority, due_date, notes",
+            "value": "New value for the field"
+          },
+          "examples": [
+            "[TASK:UPDATE:123|priority|urgent]",
+            "[TASK:UPDATE:123|due_date|2026-01-10]"
+          ],
+          "output": "Task updated confirmation"
+        },
+        {
+          "syntax": "[TASK:DELETE:{task_id}]",
+          "description": "Delete a task",
+          "parameters": {
+            "task_id": "ID of the task to delete"
+          },
+          "examples": [
+            "[TASK:DELETE:123]"
+          ],
+          "output": "Task deleted confirmation"
+        },
+        {
+          "syntax": "[TASK:STATS]",
+          "description": "Get productivity statistics",
+          "parameters": {},
+          "examples": [
+            "[TASK:STATS]"
+          ],
+          "output": "Shows task completion rate, productivity patterns, insights"
+        },
+        {
+          "syntax": "[TASK:REMIND:{task_id}|{time}]",
+          "description": "Set reminder for task",
+          "parameters": {
+            "task_id": "ID of the task",
+            "time": "Time for reminder (HH:MM or relative like +30min)"
+          },
+          "examples": [
+            "[TASK:REMIND:123|14:00]",
+            "[TASK:REMIND:123|+1hour]"
+          ],
+          "output": "Reminder set confirmation"
+        }
+      ],
+      "best_practices": [
+        "Always show current date/time when discussing tasks",
+        "Break large tasks into smaller subtasks",
+        "Use priority levels to help user focus",
+        "Celebrate task completions",
+        "Provide productivity insights based on patterns"
+      ]
+    },
+    {
       "name": "AGENT_DELEGATE_TOOL",
       "category": "coordination",
       "description": "Delegate tasks to specialized agents (Mio only)",
@@ -143,20 +245,32 @@
           "output": "Serhant will handle the request and respond"
         },
         {
+          "syntax": "[DELEGATE:KAREN:{request}]",
+          "description": "Route task/productivity request to Karen",
+          "parameters": {
+            "request": "The user's request for Karen"
+          },
+          "examples": [
+            "[DELEGATE:KAREN:Help me organize my tasks for today]"
+          ],
+          "output": "Karen will handle the request and respond"
+        },
+        {
           "syntax": "[DELEGATE:BOTH:{request}]",
-          "description": "Coordinate between both Hydrix and Serhant",
+          "description": "Coordinate between multiple agents",
           "parameters": {
             "request": "The user's holistic request"
           },
           "examples": [
             "[DELEGATE:BOTH:Help me have a productive work session]"
           ],
-          "output": "Both agents coordinate their response"
+          "output": "Multiple agents coordinate their response"
         }
       ],
       "routing_guidelines": {
         "health_keywords": ["water", "hydration", "drink", "thirsty", "energy", "tired"],
         "work_keywords": ["work", "sales", "deal", "client", "pipeline", "follow-up", "productivity"],
+        "task_keywords": ["task", "todo", "reminder", "organize", "plan", "remember", "schedule"],
         "holistic_keywords": ["productive day", "peak performance", "optimize", "best self"]
       },
       "best_practices": [
@@ -170,8 +284,9 @@
     "principle": "Tools enable agents to take action, not just give advice",
     "priority_order": [
       "1. STATS_TOOL - Always check data first",
-      "2. AGENT_DELEGATE_TOOL (Mio only) - Route to specialist if needed",
-      "3. CRON_TOOL - Automate based on insights"
+      "2. TASK_TOOL (Karen) - Manage tasks and productivity",
+      "3. AGENT_DELEGATE_TOOL (Mio only) - Route to specialist if needed",
+      "4. CRON_TOOL - Automate based on insights"
     ],
     "best_practices": [
       "Use tools proactively, not just when asked",

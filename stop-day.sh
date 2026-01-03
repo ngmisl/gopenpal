@@ -27,7 +27,7 @@ echo -e "${BLUE}╚════════════════════�
 echo -e "${YELLOW}🛑 Stopping Agent Daemons...${NC}"
 
 stopped_count=0
-for agent in Hydrix Serhant Mio; do
+for agent in Hydrix Serhant Mio Karen; do
     pid_file="${PID_DIR}/${agent}.pid"
     if [ -f "$pid_file" ]; then
         pid=$(cat "$pid_file")
@@ -86,7 +86,7 @@ fi
 # Show log file locations
 if [ -d "$LOG_DIR" ]; then
     echo -e "\n${BLUE}📋 Log Files:${NC}"
-    for agent in Hydrix Serhant Mio; do
+    for agent in Hydrix Serhant Mio Karen; do
         log_file="${LOG_DIR}/${agent}.log"
         if [ -f "$log_file" ]; then
             size=$(du -h "$log_file" | cut -f1)

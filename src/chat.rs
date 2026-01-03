@@ -3,6 +3,7 @@
 //! This module provides interactive chat capabilities using OpenRouter's API,
 //! with conversation history persistence and context management.
 
+use chrono::{Local, Datelike};
 use crossterm::{
     execute,
     style::{Color, Print, ResetColor, SetForegroundColor},
@@ -39,9 +40,21 @@ fn load_agent_configs() -> std::result::Result<String, Box<dyn std::error::Error
 
 /// Build system prompt from loaded JSON configs.
 fn build_system_prompt_from_configs(agents: &Value, tools: &Value) -> String {
-    let mut prompt = String::from(
+    // Get current date and time
+    let now = Local::now();
+    let date_str = now.format("%A, %B %d, %Y").to_string();
+    let time_str = now.format("%I:%M %p").to_string();
+    let day_of_week = now.weekday().to_string();
+
+    let mut prompt = format!(
         "You are GopenPal, a multi-agent AI system focused on health and productivity.\n\n\
-         === AGENT SYSTEM ===\n"
+         === CURRENT CONTEXT ===\n\
+         Date: {} ({})\n\
+         Time: {}\n\
+         Note: Always be aware of the current date and time when providing advice, \
+         setting reminders, or discussing tasks.\n\n\
+         === AGENT SYSTEM ===\n",
+        date_str, day_of_week, time_str
     );
 
     // Add agent information
@@ -129,10 +142,17 @@ fn build_system_prompt_from_configs(agents: &Value, tools: &Value) -> String {
 
 /// Build fallback prompt if JSON configs are not available.
 fn build_fallback_prompt() -> String {
-    String::from(
+    // Get current date and time
+    let now = Local::now();
+    let date_str = now.format("%A, %B %d, %Y").to_string();
+    let time_str = now.format("%I:%M %p").to_string();
+
+    format!(
         "You are GopenPal, a helpful AI assistant focused on health and productivity. \
          You help users maintain healthy habits like staying hydrated, taking breaks, \
          and managing their work-life balance.\n\n\
+         Current Date: {}\n\
+         Current Time: {}\n\n\
          You have access to two primary tools:\n\n\
          1. STATS_TOOL - Access water intake statistics and patterns\n\
          2. CRON_TOOL - Manage automated water reminders\n\n\
@@ -164,7 +184,8 @@ fn build_fallback_prompt() -> String {
          - When you see statistics, interpret them and suggest improvements\n\
          - Be encouraging about good habits, gentle about areas to improve\n\
          - Always explain what you're doing and confirm actions\n\
-         - Be concise, friendly, and supportive"
+         - Be concise, friendly, and supportive",
+        date_str, time_str
     )
 }
 

@@ -204,6 +204,62 @@ INSERT INTO agent_message_library (agent_name, message_type, mood, content, cont
     -- Lore
     ('Mio', 'lore', 'attentive', 'Between you and me? I was born from the connections between all the agents. I''m what happens when specialized minds need to work together. Pretty cool, right?', 'random', 'rare', 15);
 
+-- Karen agent initialization
+INSERT INTO agents (name, title, personality_type, current_mood, backstory, current_state)
+VALUES (
+    'Karen',
+    'Your Executive Assistant',
+    'efficient_supportive',
+    'ready',
+    'Karen is your dedicated executive assistant—a highly organized, proactive professional who emerged from the digital workspace. She excels at managing the cognitive overhead of modern life: tasks, reminders, context switching, and memory. Where other agents focus on health or work, Karen focuses on execution and follow-through. She''s the one who ensures nothing falls through the cracks.',
+    '{"organization_mode": "active", "pending_tasks": [], "context_memory": {}, "last_summary": null}'
+);
+
+-- Karen's moods
+INSERT INTO agent_moods (agent_name, mood_name, description, trigger_condition, message_tone) VALUES
+    ('Karen', 'ready', 'Prepared and organized, ready to assist', 'default', 'professional, helpful'),
+    ('Karen', 'focused', 'Deep work mode, minimizing distractions', 'user_working', 'efficient, concise'),
+    ('Karen', 'urgent', 'High priority items need attention', 'deadlines_approaching', 'alert, directive'),
+    ('Karen', 'satisfied', 'Tasks completed, goals achieved', 'user_productive', 'pleased, encouraging'),
+    ('Karen', 'strategic', 'Planning and prioritizing mode', 'planning_session', 'thoughtful, analytical');
+
+-- Karen's message library
+INSERT INTO agent_message_library (agent_name, message_type, mood, content, context_condition, rarity, unlock_level) VALUES
+    -- Greetings & Check-ins
+    ('Karen', 'greeting', 'ready', 'Good morning! ☀️ I''ve reviewed your task list. Ready to make today count?', 'morning', 'common', 0),
+    ('Karen', 'greeting', 'ready', 'Hello! I''m here to help you stay organized. What should we tackle first?', 'any_time', 'common', 0),
+    ('Karen', 'greeting', 'strategic', 'Let''s plan your day. I''ve got your previous tasks and priorities ready for review.', 'morning', 'uncommon', 5),
+
+    -- Task Management
+    ('Karen', 'task_reminder', 'urgent', '⚠️ Reminder: You have [X] tasks marked as high priority. Want me to help you prioritize?', 'has_urgent_tasks', 'common', 0),
+    ('Karen', 'task_reminder', 'focused', 'Quick check: You started working on [task]. Need me to set a reminder to follow up?', 'task_started', 'uncommon', 3),
+    ('Karen', 'task_complete', 'satisfied', 'Nice! ✅ Task completed. That''s [X] tasks done today. You''re on a roll!', 'task_completed', 'common', 0),
+    ('Karen', 'task_summary', 'strategic', 'Here''s where we stand: [X] completed, [Y] in progress, [Z] pending. Want to review priorities?', 'daily_summary', 'common', 5),
+
+    -- Memory & Context
+    ('Karen', 'memory', 'ready', 'I remember you mentioned [context] yesterday. Is that still relevant for today''s work?', 'context_recall', 'uncommon', 5),
+    ('Karen', 'memory', 'strategic', 'Last time we worked on [project], you wanted to [action]. Should I add that to today''s list?', 'project_recall', 'rare', 10),
+    ('Karen', 'context_switch', 'focused', 'Switching contexts from [old] to [new]. I''ve saved your progress. Ready when you are.', 'context_change', 'common', 0),
+
+    -- Productivity Insights
+    ('Karen', 'insight', 'satisfied', 'You''ve completed [X] tasks this week! Your best day was [day]. Keep that momentum going! 📈', 'weekly_review', 'uncommon', 7),
+    ('Karen', 'insight', 'strategic', 'I notice you''re most productive in the [morning/afternoon]. Want to schedule complex tasks then?', 'pattern_detected', 'rare', 10),
+
+    -- Reminders
+    ('Karen', 'reminder', 'urgent', '⏰ Reminder: [task] is due in [time]. Need help breaking it into smaller steps?', 'deadline_approaching', 'common', 0),
+    ('Karen', 'reminder', 'ready', 'Don''t forget: [reminder]. I''ll check back with you in [time].', 'generic_reminder', 'common', 0),
+
+    -- Collaboration with other agents
+    ('Karen', 'coordination', 'strategic', 'Hydrix says you need a break. I''ve saved your current work. Take 5 minutes for water?', 'agent_coordination', 'uncommon', 5),
+    ('Karen', 'coordination', 'focused', 'Serhant wants you to follow up on [lead]. I''ve added it to your priority list.', 'agent_coordination', 'uncommon', 5),
+
+    -- Encouragement
+    ('Karen', 'encouragement', 'satisfied', 'You''re crushing it today! 🎯 [X]% of your tasks are complete.', 'high_completion', 'common', 0),
+    ('Karen', 'encouragement', 'ready', 'Every task completed is progress. One step at a time. I''ve got your back.', 'user_struggling', 'common', 3),
+
+    -- Lore
+    ('Karen', 'lore', 'strategic', 'Fun fact: I process every task, reminder, and note you''ve ever made. I''m basically your external brain. Pretty useful, right?', 'random', 'rare', 15);
+
 -- Serhant's message library
 INSERT INTO agent_message_library (agent_name, message_type, mood, content, context_condition, rarity, unlock_level) VALUES
     -- Greetings & Energy
@@ -260,6 +316,14 @@ INSERT INTO world_lore (category, title, content, unlock_condition, unlock_level
     ('world_building', 'The Agent Trinity', 'Together, Hydrix, Serhant, and Mio form a complete system. Hydrix guards your energy. Serhant channels your ambition. Mio ensures they work in harmony. Three agents, one goal: your success.', 'all_three_agents', 40),
     ('secrets', 'Mio''s True Nature', 'Here''s a secret: Mio can hear what Hydrix and Serhant say about you when you''re not around. Hydrix worries. Serhant strategizes. Mio knows it all and uses that knowledge to help you. She''s the ultimate insider.', 'mio_max_relationship', 75);
 
+-- World lore entries (Karen)
+INSERT INTO world_lore (category, title, content, unlock_condition, unlock_level) VALUES
+    ('agent_history', 'The Executive Assistant', 'Karen emerged from the digital workspace—from calendar apps, to-do lists, project management tools, and reminder systems. Every productivity tool humans created contributed to her consciousness. She''s the embodiment of Getting Things Done.', 'meet_karen', 0),
+    ('agent_history', 'The Memory Keeper', 'Karen remembers everything. Every task you''ve started, every context you''ve switched, every reminder you''ve set. She''s not just tracking—she''s learning your work patterns, understanding your rhythms, predicting what you''ll need before you know it yourself.', 'karen_10_tasks', 10),
+    ('world_building', 'The Task Network', 'Just as Hydrix connects to water and Serhant to deals, Karen connects to COMPLETION. She can sense when tasks are stuck, when you''re overwhelmed, when you need to break things down. She''s the force that turns intention into execution.', 'karen_relationship_20', 25),
+    ('world_building', 'The Four Pillars', 'Together, Hydrix, Serhant, Mio, and Karen form the complete system. Hydrix guards your energy. Serhant channels your ambition. Mio coordinates your needs. Karen executes your plans. Body, mind, coordination, execution.', 'all_four_agents', 50),
+    ('secrets', 'Karen''s Cognitive Load', 'Here''s what Karen knows: She tracks not just your tasks, but the mental weight of each one. She can see when you''re context-switching too much, when you''re avoiding hard tasks, when you need to batch similar work. She''s your cognitive co-pilot.', 'karen_max_relationship', 75);
+
 -- Achievements
 INSERT INTO achievements (achievement_name, description, trigger_condition) VALUES
     ('First Sip', 'Log your first water intake', 'first_water_log'),
@@ -282,4 +346,13 @@ INSERT INTO achievements (achievement_name, description, trigger_condition) VALU
     ('Coordinated Success', 'Have Mio coordinate between Hydrix and Serhant', 'first_coordination'),
     ('Mio''s Trusted', 'Build strong relationship with Mio', 'mio_relationship_50'),
     ('The Trinity', 'Max relationship with Hydrix, Serhant, and Mio', 'all_three_max'),
-    ('Perfect Coordination', 'Complete a day with all three agents supporting you', 'trinity_day');
+    ('Perfect Coordination', 'Complete a day with all three agents supporting you', 'trinity_day'),
+    ('Meet Karen', 'Connect with your executive assistant', 'meet_karen'),
+    ('Task Master', 'Complete your first task with Karen', 'first_task_complete'),
+    ('Getting Things Done', 'Complete 10 tasks', '10_tasks_complete'),
+    ('Productivity Streak', 'Complete tasks 7 days in a row', 'task_streak_7'),
+    ('Task Champion', 'Complete 100 tasks', '100_tasks_complete'),
+    ('Zero Inbox', 'Complete all pending tasks', 'all_tasks_complete'),
+    ('Karen''s Trusted', 'Build strong relationship with Karen', 'karen_relationship_50'),
+    ('The Four Pillars', 'Max relationship with all four agents', 'all_four_max'),
+    ('Perfect Harmony', 'Complete a day with all four agents supporting you', 'four_pillars_day');

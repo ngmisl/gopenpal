@@ -84,6 +84,7 @@ echo -e "\n${BLUE}🤖 Starting Agent Daemons...${NC}"
 start_daemon "Hydrix" 45
 start_daemon "Serhant" 60
 start_daemon "Mio" 30
+start_daemon "Karen" 40
 
 # Set up cron job for water reminders
 echo -e "\n${BLUE}⏰ Setting up automated reminders...${NC}"
@@ -134,7 +135,7 @@ $GOPENPAL_BIN reminder status || true
 
 # Show daemon PIDs
 echo -e "\n${GREEN}Running Daemons:${NC}"
-for agent in Hydrix Serhant Mio; do
+for agent in Hydrix Serhant Mio Karen; do
     pid_file="${PID_DIR}/${agent}.pid"
     if [ -f "$pid_file" ]; then
         pid=$(cat "$pid_file")
@@ -151,7 +152,7 @@ cleanup() {
     echo -e "\n\n${YELLOW}Shutting down...${NC}"
 
     # Kill all daemon processes
-    for agent in Hydrix Serhant Mio; do
+    for agent in Hydrix Serhant Mio Karen; do
         pid_file="${PID_DIR}/${agent}.pid"
         if [ -f "$pid_file" ]; then
             pid=$(cat "$pid_file")

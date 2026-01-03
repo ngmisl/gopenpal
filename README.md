@@ -2,14 +2,15 @@
 
 Personal LLM health and work assistant written in Rust.
 
-GopenPal is a CLI application that helps you maintain healthy work habits through water intake tracking, intelligent reminders, and AI-powered assistance using OpenRouter. **Now featuring a living world of three AI agents (Hydrix 🌊, Serhant ⚡, Mio 🌸) with unique personalities, lore, and proactive interactions!** ✨
+GopenPal is a CLI application that helps you maintain healthy work habits through water intake tracking, intelligent reminders, and AI-powered assistance using OpenRouter. **Now featuring a living world of four AI agents (Hydrix 🌊, Serhant ⚡, Mio 🌸, Karen 📋) with unique personalities, lore, and proactive interactions!** ✨
 
 ## Features
 
-- **Living Agent World** 🌊⚡🌸: Three unique AI agents with distinct personalities
+- **Living Agent World** 🌊⚡🌸📋: Four unique AI agents with distinct personalities
   - **Hydrix** 🌊: Ancient water spirit guarding your hydration
   - **Serhant** ⚡: Big Money Energy coach for work and sales
   - **Mio** 🌸: Personal concierge coordinating between all agents
+  - **Karen** 📋: Executive assistant managing tasks, reminders, and memory
   - **Rich Backstory**: Discover lore spanning thousands of years
   - **Dynamic Personalities**: Moods change based on your habits and progress
   - **Proactive Messages**: Agents reach out randomly with encouragement, coaching, or stories
@@ -99,21 +100,49 @@ Mio is your personal concierge who emerged when Hydrix and Serhant first needed 
 - Celebration when both agents are proud
 - Insider knowledge about what agents say about you
 
+### Karen - Your Executive Assistant 📋
+
+Karen is your dedicated executive assistant who emerged from the digital workspace—from calendar apps, to-do lists, project management tools, and reminder systems. She excels at managing the cognitive overhead of modern life: tasks, reminders, context switching, and memory. Where other agents focus on health, work, or coordination, Karen focuses on execution and follow-through.
+
+**Personality & Moods:**
+- **Ready** 📋: Prepared and organized, ready to assist (default)
+- **Focused** 🎯: Deep work mode, minimizing distractions
+- **Urgent** ⚠️: High priority items need attention
+- **Satisfied** ✅: Tasks completed, goals achieved
+- **Strategic** 📊: Planning and prioritizing mode
+
+**Karen's Skills:**
+- **Task Management**: Create, update, complete, and organize tasks
+- **Context Memory**: Remembers your work patterns and preferences
+- **Reminder System**: Proactive reminders for deadlines and follow-ups
+- **Productivity Analysis**: Tracks patterns and provides insights
+- **Task Prioritization**: Helps you focus on what matters most
+- **Cognitive Load Management**: Reduces mental overhead
+
+**Proactive Interactions:**
+- Morning task reviews and priority setting
+- Deadline reminders and follow-up prompts
+- Productivity insights and pattern recognition
+- Task completion celebrations
+- Context switching assistance
+- Coordination with other agents for holistic support
+
 ### The Agent World 🌐
 
 **Relationship & Lore System:**
-- Build bonds with Hydrix, Serhant, and Mio over time
+- Build bonds with all four agents over time
 - Unlock backstory entries as relationships deepen
 - Discover how the agents chose to work together
-- Learn about the Water Network, Deal Network, and Coordination Network
+- Learn about the Water Network, Deal Network, Coordination Network, and Task Network
 - Earn achievements that trigger special interactions
 
-**The Agent Trinity:**
+**The Four Pillars:**
 - **Hydrix** ensures your **body** performs at peak level
 - **Serhant** ensures your **mind** conquers challenges
 - **Mio** ensures they work in **harmony** for your success
+- **Karen** ensures you **execute** your plans and intentions
 
-Peak performance requires all three. They're not competing—they're collaborating on your holistic well-being.
+Peak performance requires all four pillars. They're not competing—they're collaborating on your holistic well-being: body, mind, coordination, and execution.
 
 ## Installation
 
@@ -159,6 +188,7 @@ cp .env.example .env
   - **Hydrix** (every 45 min) - Hydration guardian
   - **Serhant** (every 60 min) - Work/sales coach
   - **Mio** (every 30 min) - Personal concierge
+  - **Karen** (every 40 min) - Executive assistant
 - ✅ Installs cron jobs for water reminders (every 30 min, 9 AM - 9 PM)
 - ✅ Auto-logs morning water (if run 6 AM - 12 PM)
 - ✅ Displays current status and statistics
