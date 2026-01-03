@@ -61,6 +61,7 @@ impl AgentDaemon {
         self.send_agent_message("Hydrix", "greeting").await?;
 
         let mut rng = rand::thread_rng();
+        let mut loop_count = 0u64;
 
         loop {
             // Calculate next interval with randomness
@@ -82,6 +83,15 @@ impl AgentDaemon {
                     error!("Failed to send proactive message: {}", e);
                 }
             }
+
+            // Check for achievements periodically (every 10th iteration, approximately every ~7.5 hours)
+            if loop_count.is_multiple_of(10) {
+                if let Err(e) = self.agent_system.auto_check_achievements().await {
+                    error!("Failed to check achievements: {}", e);
+                }
+            }
+
+            loop_count += 1;
         }
     }
 

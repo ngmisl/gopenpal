@@ -60,7 +60,7 @@ impl Default for App {
     fn default() -> Self {
         Self {
             current_tab: 0,
-            tabs: vec!["Dashboard", "Water", "Chat", "Cron", "Settings"],
+            tabs: vec!["Dashboard", "Water", "Chat", "Agents", "Cron", "Settings"],
             water_input: String::new(),
             chat_input: String::new(),
             chat_messages: Vec::new(),
@@ -300,8 +300,9 @@ fn ui(f: &mut Frame, app: &App, db: &Database) {
         0 => render_dashboard(f, chunks[1], db),
         1 => render_water_tracking(f, chunks[1], app, db),
         2 => render_chat(f, chunks[1], app),
-        3 => render_cron(f, chunks[1], app),
-        4 => render_settings(f, chunks[1], db),
+        3 => render_agents(f, chunks[1], db),
+        4 => render_cron(f, chunks[1], app),
+        5 => render_settings(f, chunks[1], db),
         _ => {}
     }
 }
@@ -462,6 +463,140 @@ fn render_chat(f: &mut Frame, area: Rect, app: &App) {
                 .title("Message - Press 'c' to chat, Enter to send, Esc to cancel"),
         );
     f.render_widget(input, chunks[1]);
+}
+
+/// Render the agents status tab.
+fn render_agents(f: &mut Frame, area: Rect, db: &Database) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(0),
+        ])
+        .split(area);
+
+    // Title
+    let title = Paragraph::new("Agent Status Dashboard")
+        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .alignment(Alignment::Center)
+        .block(Block::default().borders(Borders::ALL));
+    f.render_widget(title, chunks[0]);
+
+    // Agent information
+    let handle = tokio::runtime::Handle::current();
+
+    // Get agent information from database
+    let agents_info = handle.block_on(async {
+        use crate::agents::AgentSystem;
+        let agent_system = AgentSystem::new(db.clone());
+
+        let mut info = Vec::new();
+
+        // Fetch all four agents
+        for agent_name in &["Hydrix", "Serhant", "Mio", "Karen"] {
+            if let Ok(Some(agent)) = agent_system.get_agent(agent_name).await {
+                let mood_emoji = match agent.current_mood.as_str() {
+                    // Hydrix moods
+                    "joyful" => "🎉",
+                    "concerned" => "😟",
+                    "proud" => "⭐",
+                    "nostalgic" => "📜",
+                    "playful" => "😊",
+                    "contemplative" => "🤔",
+                    "hopeful" => "🌊",
+                    // Serhant moods
+                    "energized" => "⚡",
+                    "focused" => "🎯",
+                    "fired_up" => "🔥",
+                    "coaching" => "📚",
+                    "closing" => "💼",
+                    // Mio moods
+                    "attentive" => "🌸",
+                    "coordinating" => "🔄",
+                    "nurturing" => "💝",
+                    "strategic" => "🧩",
+                    // Karen moods
+                    "ready" => "📋",
+                    "urgent" => "⚠️",
+                    "satisfied" => "✅",
+                    _ => "❓",
+                };
+
+                let relationship_bar = {
+                    let filled = (agent.relationship_level / 10) as usize;
+                    let empty = 10 - filled;
+                    format!("[{}{}]", "█".repeat(filled), "░".repeat(empty))
+                };
+
+                info.push(Line::from(vec![
+                    Span::styled(
+                        format!("{} {} ", mood_emoji, agent.name),
+                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!("({})", agent.title),
+                        Style::default().fg(Color::Gray),
+                    ),
+                ]));
+
+                info.push(Line::from(vec![
+                    Span::raw("  Mood: "),
+                    Span::styled(
+                        agent.current_mood.clone(),
+                        Style::default().fg(Color::Yellow),
+                    ),
+                ]));
+
+                info.push(Line::from(vec![
+                    Span::raw("  Relationship: "),
+                    Span::styled(
+                        relationship_bar,
+                        Style::default().fg(Color::Green),
+                    ),
+                    Span::raw(format!(" {}/100", agent.relationship_level)),
+                ]));
+
+                if let Some(last_interaction) = agent.last_interaction {
+                    let time_ago = Local::now().signed_duration_since(last_interaction);
+                    let time_str = if time_ago.num_hours() > 0 {
+                        format!("{}h ago", time_ago.num_hours())
+                    } else if time_ago.num_minutes() > 0 {
+                        format!("{}m ago", time_ago.num_minutes())
+                    } else {
+                        "just now".to_string()
+                    };
+
+                    info.push(Line::from(vec![
+                        Span::raw("  Last seen: "),
+                        Span::styled(
+                            time_str,
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                    ]));
+                }
+
+                info.push(Line::raw(""));
+            }
+        }
+
+        if info.is_empty() {
+            vec![Line::from(Span::styled(
+                "No agents found. Run 'gopenpal init' to initialize the database.",
+                Style::default().fg(Color::Red),
+            ))]
+        } else {
+            info
+        }
+    });
+
+    let agents_list = Paragraph::new(agents_info)
+        .block(
+            Block::default()
+                .title("🤖 Active Agents (Press ← → to navigate)")
+                .borders(Borders::ALL),
+        )
+        .alignment(Alignment::Left);
+    f.render_widget(agents_list, chunks[1]);
 }
 
 /// Render the cron management tab.

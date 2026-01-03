@@ -246,7 +246,6 @@ impl AgentSystem {
     }
 
     /// Check and unlock achievements.
-    #[allow(dead_code)]
     pub async fn check_achievement(&self, trigger: &str) -> Result<Option<Achievement>> {
         let achievement = sqlx::query_as::<_, Achievement>(
             "SELECT * FROM achievements WHERE trigger_condition = ? AND unlocked = 0",
@@ -262,9 +261,80 @@ impl AgentSystem {
             .bind(ach.id)
             .execute(self.db.pool())
             .await?;
+
+            // Send notification about unlocked achievement
+            use notify_rust::Notification;
+            let _ = Notification::new()
+                .summary("🏆 Achievement Unlocked!")
+                .body(&format!("{}: {}", ach.achievement_name, ach.description.as_deref().unwrap_or("")))
+                .icon("🏆")
+                .timeout(15000)
+                .show();
         }
 
         Ok(achievement)
+    }
+
+    /// Automatically check and unlock all relevant achievements based on current state.
+    pub async fn auto_check_achievements(&self) -> Result<Vec<Achievement>> {
+        let mut unlocked = Vec::new();
+
+        // Check water intake achievements
+        if let Ok(today_total) = self.db.get_today_total_ml().await {
+            if today_total > 0 {
+                if let Some(ach) = self.check_achievement("first_water_log").await? {
+                    unlocked.push(ach);
+                }
+            }
+            if today_total >= 2000 {
+                if let Some(ach) = self.check_achievement("daily_goal_once").await? {
+                    unlocked.push(ach);
+                }
+            }
+        }
+
+        // Check relationship achievements
+        for agent_name in &["Hydrix", "Serhant", "Mio", "Karen"] {
+            if let Ok(Some(agent)) = self.get_agent(agent_name).await {
+                if agent.relationship_level >= 50 {
+                    let trigger = format!("{}_relationship_50", agent_name.to_lowercase());
+                    if let Some(ach) = self.check_achievement(&trigger).await? {
+                        unlocked.push(ach);
+                    }
+                }
+                if agent.relationship_level >= 100 {
+                    if let Some(ach) = self.check_achievement("relationship_100").await? {
+                        unlocked.push(ach);
+                    }
+                }
+
+                // Check if first meeting with agent
+                let trigger = format!("meet_{}", agent_name.to_lowercase());
+                if let Some(ach) = self.check_achievement(&trigger).await? {
+                    unlocked.push(ach);
+                }
+            }
+        }
+
+        // Check multi-agent achievements
+        let hydrix_rel = self.get_agent("Hydrix").await?.map(|a| a.relationship_level).unwrap_or(0);
+        let serhant_rel = self.get_agent("Serhant").await?.map(|a| a.relationship_level).unwrap_or(0);
+        let mio_rel = self.get_agent("Mio").await?.map(|a| a.relationship_level).unwrap_or(0);
+        let karen_rel = self.get_agent("Karen").await?.map(|a| a.relationship_level).unwrap_or(0);
+
+        if hydrix_rel >= 100 && serhant_rel >= 100 {
+            if let Some(ach) = self.check_achievement("both_agents_max").await? {
+                unlocked.push(ach);
+            }
+        }
+
+        if hydrix_rel >= 100 && serhant_rel >= 100 && mio_rel >= 100 && karen_rel >= 100 {
+            if let Some(ach) = self.check_achievement("all_four_max").await? {
+                unlocked.push(ach);
+            }
+        }
+
+        Ok(unlocked)
     }
 
     /// Determine mood based on user's hydration patterns.
