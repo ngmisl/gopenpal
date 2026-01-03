@@ -7,6 +7,8 @@ use crossterm::{
     execute,
     style::{Color, Print, ResetColor, SetForegroundColor},
 };
+use serde_json::Value;
+use std::fs;
 use std::io::{self, Write};
 use tracing::info;
 
@@ -14,6 +16,157 @@ use crate::cron::CronManager;
 use crate::db::Database;
 use crate::error::Result;
 use crate::openrouter::{Message, OpenRouterClient};
+
+/// Load agent and tool configurations from JSON files.
+fn load_agent_configs() -> std::result::Result<String, Box<dyn std::error::Error>> {
+    // Try to load configs from standard location
+    let agents_path = "configs/agents.json";
+    let tools_path = "configs/tools.json";
+
+    // If configs don't exist, return fallback prompt
+    if !std::path::Path::new(agents_path).exists() || !std::path::Path::new(tools_path).exists() {
+        return Ok(build_fallback_prompt());
+    }
+
+    let agents_json = fs::read_to_string(agents_path)?;
+    let tools_json = fs::read_to_string(tools_path)?;
+
+    let agents: Value = serde_json::from_str(&agents_json)?;
+    let tools: Value = serde_json::from_str(&tools_json)?;
+
+    Ok(build_system_prompt_from_configs(&agents, &tools))
+}
+
+/// Build system prompt from loaded JSON configs.
+fn build_system_prompt_from_configs(agents: &Value, tools: &Value) -> String {
+    let mut prompt = String::from(
+        "You are GopenPal, a multi-agent AI system focused on health and productivity.\n\n\
+         === AGENT SYSTEM ===\n"
+    );
+
+    // Add agent information
+    if let Some(agent_list) = agents["agents"].as_array() {
+        prompt.push_str("Available Agents:\n");
+        for agent in agent_list {
+            if let (Some(name), Some(title), Some(desc)) = (
+                agent["name"].as_str(),
+                agent["title"].as_str(),
+                agent["description"].as_str()
+            ) {
+                prompt.push_str(&format!("\n**{}** ({})\n{}\n", name, title, desc));
+
+                if let Some(skills) = agent["skills"].as_array() {
+                    prompt.push_str("Skills: ");
+                    let skill_names: Vec<&str> = skills.iter()
+                        .filter_map(|s| s.as_str())
+                        .collect();
+                    prompt.push_str(&skill_names.join(", "));
+                    prompt.push('\n');
+                }
+            }
+        }
+    }
+
+    prompt.push_str("\n=== AVAILABLE TOOLS ===\n");
+
+    // Add tool information
+    if let Some(tool_list) = tools["tools"].as_array() {
+        for tool in tool_list {
+            if let Some(name) = tool["name"].as_str() {
+                prompt.push_str(&format!("\n**{}**\n", name));
+
+                if let Some(desc) = tool["description"].as_str() {
+                    prompt.push_str(&format!("{}\n", desc));
+                }
+
+                if let Some(usage) = tool["usage_notes"].as_str() {
+                    prompt.push_str(&format!("Usage: {}\n", usage));
+                }
+
+                if let Some(commands) = tool["commands"].as_array() {
+                    prompt.push_str("\nCommands:\n");
+                    for cmd in commands {
+                        if let (Some(syntax), Some(desc)) = (
+                            cmd["syntax"].as_str(),
+                            cmd["description"].as_str()
+                        ) {
+                            prompt.push_str(&format!("  {} - {}\n", syntax, desc));
+
+                            if let Some(examples) = cmd["examples"].as_array() {
+                                for example in examples {
+                                    if let Some(ex) = example.as_str() {
+                                        prompt.push_str(&format!("    Example: {}\n", ex));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if let Some(practices) = tool["best_practices"].as_array() {
+                    prompt.push_str("\nBest Practices:\n");
+                    for practice in practices {
+                        if let Some(p) = practice.as_str() {
+                            prompt.push_str(&format!("  - {}\n", p));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    prompt.push_str(
+        "\n=== RESPONSE GUIDELINES ===\n\
+         - Use STATS_TOOL to analyze data first, then provide insights\n\
+         - When coordinating complex requests, delegate to specialist agents\n\
+         - Always explain what you're doing and confirm actions\n\
+         - Be encouraging about good habits, gentle about areas to improve\n\
+         - Be concise, friendly, and supportive\n"
+    );
+
+    prompt
+}
+
+/// Build fallback prompt if JSON configs are not available.
+fn build_fallback_prompt() -> String {
+    String::from(
+        "You are GopenPal, a helpful AI assistant focused on health and productivity. \
+         You help users maintain healthy habits like staying hydrated, taking breaks, \
+         and managing their work-life balance.\n\n\
+         You have access to two primary tools:\n\n\
+         1. STATS_TOOL - Access water intake statistics and patterns\n\
+         2. CRON_TOOL - Manage automated water reminders\n\n\
+         === STATS_TOOL (use FIRST when user asks about their habits, progress, or patterns) ===\n\
+         Commands (output these EXACTLY as shown):\n\
+         - [STATS:SUMMARY:7] - Get 7-day summary with all statistics\n\
+         - [STATS:SUMMARY:30] - Get 30-day summary\n\
+         - [STATS:HOURLY] - Get hourly drinking patterns\n\
+         - [STATS:WEEKLY] - Get weekly patterns\n\
+         - [STATS:EFFECTIVENESS] - Get reminder effectiveness stats\n\n\
+         Use STATS_TOOL when users ask:\n\
+         - \"How am I doing?\" / \"Show my progress\"\n\
+         - \"What are my patterns?\" / \"When do I drink most?\"\n\
+         - \"Are the reminders helping?\"\n\
+         - Any questions about their water intake history or habits\n\n\
+         === CRON_TOOL ===\n\
+         Commands (output these EXACTLY as shown):\n\
+         - [CRON:INSTALL:*/30 * * * *] - Install cron job with schedule\n\
+         - [CRON:REMOVE] - Remove cron job\n\
+         - [CRON:STATUS] - Check cron job status\n\n\
+         Available schedules:\n\
+         - */15 * * * * (every 15 minutes)\n\
+         - */30 * * * * (every 30 minutes)\n\
+         - 0 * * * * (every hour)\n\
+         - 0 */2 * * * (every 2 hours)\n\
+         - */30 9-17 * * 1-5 (every 30min, work hours only)\n\n\
+         === RESPONSE GUIDELINES ===\n\
+         - Use STATS_TOOL to analyze data, then provide insights and recommendations\n\
+         - When you see statistics, interpret them and suggest improvements\n\
+         - Be encouraging about good habits, gentle about areas to improve\n\
+         - Always explain what you're doing and confirm actions\n\
+         - Be concise, friendly, and supportive"
+    )
+}
 
 /// Chat session manager.
 ///
@@ -64,43 +217,12 @@ impl ChatSession {
 
         // Add system message for health/work assistant context with tools
         if messages.is_empty() {
-            let system_msg = Message::system(
-                "You are GopenPal, a helpful AI assistant focused on health and productivity. \
-                 You help users maintain healthy habits like staying hydrated, taking breaks, \
-                 and managing their work-life balance.\n\n\
-                 You have access to two primary tools:\n\n\
-                 1. STATS_TOOL - Access water intake statistics and patterns\n\
-                 2. CRON_TOOL - Manage automated water reminders\n\n\
-                 === STATS_TOOL (use FIRST when user asks about their habits, progress, or patterns) ===\n\
-                 Commands (output these EXACTLY as shown):\n\
-                 - [STATS:SUMMARY:7] - Get 7-day summary with all statistics\n\
-                 - [STATS:SUMMARY:30] - Get 30-day summary\n\
-                 - [STATS:HOURLY] - Get hourly drinking patterns\n\
-                 - [STATS:WEEKLY] - Get weekly patterns\n\
-                 - [STATS:EFFECTIVENESS] - Get reminder effectiveness stats\n\n\
-                 Use STATS_TOOL when users ask:\n\
-                 - \"How am I doing?\" / \"Show my progress\"\n\
-                 - \"What are my patterns?\" / \"When do I drink most?\"\n\
-                 - \"Are the reminders helping?\"\n\
-                 - Any questions about their water intake history or habits\n\n\
-                 === CRON_TOOL ===\n\
-                 Commands (output these EXACTLY as shown):\n\
-                 - [CRON:INSTALL:*/30 * * * *] - Install cron job with schedule\n\
-                 - [CRON:REMOVE] - Remove cron job\n\
-                 - [CRON:STATUS] - Check cron job status\n\n\
-                 Available schedules:\n\
-                 - */15 * * * * (every 15 minutes)\n\
-                 - */30 * * * * (every 30 minutes)\n\
-                 - 0 * * * * (every hour)\n\
-                 - 0 */2 * * * (every 2 hours)\n\
-                 - */30 9-17 * * 1-5 (every 30min, work hours only)\n\n\
-                 === RESPONSE GUIDELINES ===\n\
-                 - Use STATS_TOOL to analyze data, then provide insights and recommendations\n\
-                 - When you see statistics, interpret them and suggest improvements\n\
-                 - Be encouraging about good habits, gentle about areas to improve\n\
-                 - Always explain what you're doing and confirm actions\n\
-                 - Be concise, friendly, and supportive",
-            );
+            let system_prompt = load_agent_configs()
+                .unwrap_or_else(|e| {
+                    eprintln!("Warning: Failed to load agent configs: {}. Using fallback.", e);
+                    build_fallback_prompt()
+                });
+            let system_msg = Message::system(&system_prompt);
             messages.insert(0, system_msg);
         }
 
@@ -209,44 +331,14 @@ impl ChatSession {
     ///
     /// Returns error if API call or database operations fail
     pub async fn send_message(&self, message: &str) -> Result<String> {
+        let system_prompt = load_agent_configs()
+            .unwrap_or_else(|e| {
+                eprintln!("Warning: Failed to load agent configs: {}. Using fallback.", e);
+                build_fallback_prompt()
+            });
+
         let mut messages = vec![
-            Message::system(
-                "You are GopenPal, a helpful AI assistant focused on health and productivity. \
-                 You help users maintain healthy habits like staying hydrated, taking breaks, \
-                 and managing their work-life balance.\n\n\
-                 You have access to two primary tools:\n\n\
-                 1. STATS_TOOL - Access water intake statistics and patterns\n\
-                 2. CRON_TOOL - Manage automated water reminders\n\n\
-                 === STATS_TOOL (use FIRST when user asks about their habits, progress, or patterns) ===\n\
-                 Commands (output these EXACTLY as shown):\n\
-                 - [STATS:SUMMARY:7] - Get 7-day summary with all statistics\n\
-                 - [STATS:SUMMARY:30] - Get 30-day summary\n\
-                 - [STATS:HOURLY] - Get hourly drinking patterns\n\
-                 - [STATS:WEEKLY] - Get weekly patterns\n\
-                 - [STATS:EFFECTIVENESS] - Get reminder effectiveness stats\n\n\
-                 Use STATS_TOOL when users ask:\n\
-                 - \"How am I doing?\" / \"Show my progress\"\n\
-                 - \"What are my patterns?\" / \"When do I drink most?\"\n\
-                 - \"Are the reminders helping?\"\n\
-                 - Any questions about their water intake history or habits\n\n\
-                 === CRON_TOOL ===\n\
-                 Commands (output these EXACTLY as shown):\n\
-                 - [CRON:INSTALL:*/30 * * * *] - Install cron job with schedule\n\
-                 - [CRON:REMOVE] - Remove cron job\n\
-                 - [CRON:STATUS] - Check cron job status\n\n\
-                 Available schedules:\n\
-                 - */15 * * * * (every 15 minutes)\n\
-                 - */30 * * * * (every 30 minutes)\n\
-                 - 0 * * * * (every hour)\n\
-                 - 0 */2 * * * (every 2 hours)\n\
-                 - */30 9-17 * * 1-5 (every 30min, work hours only)\n\n\
-                 === RESPONSE GUIDELINES ===\n\
-                 - Use STATS_TOOL to analyze data, then provide insights and recommendations\n\
-                 - When you see statistics, interpret them and suggest improvements\n\
-                 - Be encouraging about good habits, gentle about areas to improve\n\
-                 - Always explain what you're doing and confirm actions\n\
-                 - Be concise, friendly, and supportive",
-            ),
+            Message::system(&system_prompt),
             Message::user(message),
         ];
 

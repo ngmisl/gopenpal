@@ -29,6 +29,7 @@ pub struct Agent {
 
 /// Agent mood definition.
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[allow(dead_code)]
 pub struct AgentMood {
     pub id: i64,
     pub agent_name: String,
@@ -53,6 +54,7 @@ pub struct AgentMessage {
 
 /// Agent interaction record.
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[allow(dead_code)]
 pub struct AgentInteraction {
     pub id: i64,
     pub agent_name: String,
@@ -79,6 +81,7 @@ pub struct WorldLore {
 
 /// Achievement definition.
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[allow(dead_code)]
 pub struct Achievement {
     pub id: i64,
     pub achievement_name: String,
@@ -243,6 +246,7 @@ impl AgentSystem {
     }
 
     /// Check and unlock achievements.
+    #[allow(dead_code)]
     pub async fn check_achievement(&self, trigger: &str) -> Result<Option<Achievement>> {
         let achievement = sqlx::query_as::<_, Achievement>(
             "SELECT * FROM achievements WHERE trigger_condition = ? AND unlocked = 0",

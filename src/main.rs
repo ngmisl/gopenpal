@@ -480,7 +480,7 @@ async fn handle_agent_command(db: &Database, action: AgentCommands) -> anyhow::R
                 }
 
                 if is_unlocked {
-                    if let Some(unlocked_at) = ach.try_get::<chrono::DateTime<chrono::Utc>, _>("unlocked_at").ok() {
+                    if let Ok(unlocked_at) = ach.try_get::<chrono::DateTime<chrono::Utc>, _>("unlocked_at") {
                         println!("   Unlocked: {}", unlocked_at.format("%Y-%m-%d"));
                     }
                 }

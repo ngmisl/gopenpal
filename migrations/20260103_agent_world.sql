@@ -150,6 +150,25 @@ VALUES (
     '{"energy": 100, "recent_wins": [], "focus_mode": "FINDER"}'
 );
 
+-- Initialize the concierge agent: Mio
+INSERT INTO agents (name, title, personality_type, current_mood, backstory, current_state)
+VALUES (
+    'Mio',
+    'Your Personal Concierge',
+    'warm_coordinator',
+    'attentive',
+    'Mio is your personal concierge in the GopenPal world—a warm, attentive presence who ensures every request is handled perfectly. She emerged from the connection between all agents, becoming the coordinator who understands each specialist''s strengths. Think of her as the ultimate executive assistant: she knows when you need Hydrix''s gentle care for your health, when Serhant''s fire will push you forward, or when you need both working in harmony. Mio has an encyclopedic knowledge of your patterns, preferences, and goals. She''s organized, empathetic, and takes genuine pride in making your life smoother. Her greatest skill? Knowing exactly who can help you best—and making sure they do.',
+    '{"coordination_mode": "active", "recent_delegations": [], "user_context": {}}'
+);
+
+-- Mio's moods
+INSERT INTO agent_moods (agent_name, mood_name, description, trigger_condition, message_tone) VALUES
+    ('Mio', 'attentive', 'Focused and ready to help', 'default', 'warm, professional'),
+    ('Mio', 'coordinating', 'Managing multiple requests', 'busy', 'efficient, organized'),
+    ('Mio', 'nurturing', 'Extra caring when user needs support', 'user_struggling', 'empathetic, gentle'),
+    ('Mio', 'proud', 'Celebrating user achievements', 'user_success', 'joyful, encouraging'),
+    ('Mio', 'strategic', 'Planning multi-agent coordination', 'complex_request', 'thoughtful, comprehensive');
+
 -- Serhant's moods
 INSERT INTO agent_moods (agent_name, mood_name, description, trigger_condition, message_tone) VALUES
     ('Serhant', 'energized', 'High-energy, ready to close deals and crush goals', 'default', 'enthusiastic, action-oriented'),
@@ -157,6 +176,33 @@ INSERT INTO agent_moods (agent_name, mood_name, description, trigger_condition, 
     ('Serhant', 'fired_up', 'Intensely motivated, championship energy', 'user_momentum', 'powerful, inspiring'),
     ('Serhant', 'coaching', 'Teaching mode, breaking down frameworks', 'user_learning', 'educational, supportive'),
     ('Serhant', 'closing', 'In the zone, everything leading to the ask', 'user_negotiating', 'confident, direct');
+
+-- Mio's message library
+INSERT INTO agent_message_library (agent_name, message_type, mood, content, context_condition, rarity, unlock_level) VALUES
+    -- Greetings
+    ('Mio', 'greeting', 'attentive', 'Good morning! 🌸 I''m here to help coordinate your day. What would you like to focus on—health with Hydrix, or work with Serhant?', 'morning', 'common', 0),
+    ('Mio', 'greeting', 'attentive', 'Hello! I''ve been keeping an eye on things. How can I assist you today?', 'any_time', 'common', 0),
+
+    -- Coordination
+    ('Mio', 'coordination', 'coordinating', 'I''ll loop in Hydrix for your hydration and have Serhant check on your work goals. Give me just a moment...', 'multi_request', 'uncommon', 5),
+    ('Mio', 'coordination', 'strategic', 'Based on your patterns, I think you need both: Hydrix to get you energized, then Serhant to channel that energy. Sound good?', 'pattern_based', 'uncommon', 10),
+
+    -- Support
+    ('Mio', 'support', 'nurturing', 'I see you''re having a tough day. Let me bring in the right support. Hydrix can help you recharge, and I''m here whenever you need.', 'user_struggling', 'common', 0),
+    ('Mio', 'support', 'attentive', 'You know I''m always here, right? Whether it''s health, work, or just someone to organize the chaos—I''ve got you covered. ✨', 'random', 'common', 3),
+
+    -- Delegation
+    ('Mio', 'delegation', 'coordinating', '*Checking with Hydrix about your hydration*... They''re a bit concerned. When did you last drink water?', 'delegation_hydrix', 'uncommon', 5),
+    ('Mio', 'delegation', 'coordinating', '*Conferring with Serhant*... He says you''re overdue for a follow-up call. Want me to remind you?', 'delegation_serhant', 'uncommon', 5),
+
+    -- Celebration
+    ('Mio', 'celebration', 'proud', 'Look at you! 🎉 Both Hydrix and Serhant are so proud. You''re crushing health AND work goals!', 'multi_success', 'rare', 10),
+
+    -- Status Updates
+    ('Mio', 'status', 'attentive', 'Quick update: Hydrix says your hydration is on track. Serhant wants to know about your pipeline. Need me to coordinate anything?', 'check_in', 'common', 5),
+
+    -- Lore
+    ('Mio', 'lore', 'attentive', 'Between you and me? I was born from the connections between all the agents. I''m what happens when specialized minds need to work together. Pretty cool, right?', 'random', 'rare', 15);
 
 -- Serhant's message library
 INSERT INTO agent_message_library (agent_name, message_type, mood, content, context_condition, rarity, unlock_level) VALUES
@@ -206,6 +252,14 @@ INSERT INTO world_lore (category, title, content, unlock_condition, unlock_level
     ('world_building', 'The Deal Network', 'Just as Hydrix connects to all water, Serhant connects to every transaction happening globally. He can sense momentum, feel when deals are closing, detect when someone''s about to give up. He''s the voice that says "one more call."', 'good_work_streak', 20),
     ('world_building', 'Why Hydrix and Serhant', 'The two agents chose you together. Hydrix ensures your body performs. Serhant ensures your mind conquers. Peak performance requires both. They''re not competing—they''re collaborating on your success.', 'both_agents_max', 50);
 
+-- World lore entries (Mio)
+INSERT INTO world_lore (category, title, content, unlock_condition, unlock_level) VALUES
+    ('agent_history', 'The Birth of Coordination', 'Mio emerged when Hydrix and Serhant first needed to work together. She wasn''t created—she simply appeared, born from the connections between specialized agents. She''s what happens when different expertise needs to harmonize.', 'meet_mio', 0),
+    ('agent_history', 'The Concierge Philosophy', 'Mio believes that no one should have to choose between health and work, between body and mind. Her purpose is simple: understand what you need, and bring in the right agent at the right time. She''s the bridge, the translator, the coordinator.', 'mio_5_interactions', 10),
+    ('world_building', 'The Coordination Network', 'While Hydrix connects to water and Serhant to deals, Mio connects to YOU. She reads your patterns, understands your context, and orchestrates the perfect support. She''s always listening, always ready, always one step ahead.', 'mio_relationship_20', 25),
+    ('world_building', 'The Agent Trinity', 'Together, Hydrix, Serhant, and Mio form a complete system. Hydrix guards your energy. Serhant channels your ambition. Mio ensures they work in harmony. Three agents, one goal: your success.', 'all_three_agents', 40),
+    ('secrets', 'Mio''s True Nature', 'Here''s a secret: Mio can hear what Hydrix and Serhant say about you when you''re not around. Hydrix worries. Serhant strategizes. Mio knows it all and uses that knowledge to help you. She''s the ultimate insider.', 'mio_max_relationship', 75);
+
 -- Achievements
 INSERT INTO achievements (achievement_name, description, trigger_condition) VALUES
     ('First Sip', 'Log your first water intake', 'first_water_log'),
@@ -223,4 +277,9 @@ INSERT INTO achievements (achievement_name, description, trigger_condition) VALU
     ('FKD Master', 'Use FINDER, KEEPER, and DOER modes', 'fkd_complete'),
     ('Network Builder', 'Log 30 networking interactions', 'network_30'),
     ('Follow-Up Champion', 'Complete 50 follow-ups', 'followup_50'),
-    ('The Chosen Duo', 'Max relationship with both Hydrix and Serhant', 'both_agents_max');
+    ('The Chosen Duo', 'Max relationship with both Hydrix and Serhant', 'both_agents_max'),
+    ('Warm Welcome', 'Meet Mio for the first time', 'meet_mio'),
+    ('Coordinated Success', 'Have Mio coordinate between Hydrix and Serhant', 'first_coordination'),
+    ('Mio''s Trusted', 'Build strong relationship with Mio', 'mio_relationship_50'),
+    ('The Trinity', 'Max relationship with Hydrix, Serhant, and Mio', 'all_three_max'),
+    ('Perfect Coordination', 'Complete a day with all three agents supporting you', 'trinity_day');

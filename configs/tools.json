@@ -1,0 +1,183 @@
+{
+  "tools": [
+    {
+      "name": "STATS_TOOL",
+      "category": "analytics",
+      "description": "Access water intake statistics and patterns for personalized insights",
+      "access": ["Mio", "Hydrix", "Serhant"],
+      "priority": "primary",
+      "usage_notes": "Use FIRST when user asks about habits, progress, or patterns",
+      "commands": [
+        {
+          "syntax": "[STATS:SUMMARY:{days}]",
+          "description": "Get comprehensive summary with all statistics",
+          "parameters": {
+            "days": "Number of days to analyze (7, 14, 30)"
+          },
+          "examples": [
+            "[STATS:SUMMARY:7] - Get 7-day summary",
+            "[STATS:SUMMARY:30] - Get 30-day summary"
+          ],
+          "output": "Returns: daily average, total intake, best day, hourly patterns, weekly trends, reminder effectiveness"
+        },
+        {
+          "syntax": "[STATS:HOURLY]",
+          "description": "Get hourly drinking patterns",
+          "parameters": {},
+          "examples": ["[STATS:HOURLY]"],
+          "output": "Shows which hours you drink most water, average intake per hour"
+        },
+        {
+          "syntax": "[STATS:WEEKLY]",
+          "description": "Get weekly patterns by day of week",
+          "parameters": {},
+          "examples": ["[STATS:WEEKLY]"],
+          "output": "Shows which days you drink most water, day-by-day breakdown"
+        },
+        {
+          "syntax": "[STATS:EFFECTIVENESS]",
+          "description": "Get reminder effectiveness statistics",
+          "parameters": {},
+          "examples": ["[STATS:EFFECTIVENESS]"],
+          "output": "Shows how well reminders work, response rates, best reminder times"
+        }
+      ],
+      "best_practices": [
+        "Always use STATS before making recommendations",
+        "Reference specific numbers from stats in your advice",
+        "Combine with user context for personalized insights"
+      ]
+    },
+    {
+      "name": "CRON_TOOL",
+      "category": "automation",
+      "description": "Manage automated water reminders via system cron jobs",
+      "access": ["Mio", "Hydrix", "Serhant"],
+      "priority": "primary",
+      "usage_notes": "AI should manage cron jobs as primary automation tool",
+      "commands": [
+        {
+          "syntax": "[CRON:INSTALL:{preset}]",
+          "description": "Install a cron job from preset",
+          "parameters": {
+            "preset": "Preset name (e.g., every_30min, hourly, workday_hourly)"
+          },
+          "examples": [
+            "[CRON:INSTALL:every_30min]",
+            "[CRON:INSTALL:workday_hourly]"
+          ],
+          "output": "Installs cron job and confirms schedule"
+        },
+        {
+          "syntax": "[CRON:REMOVE]",
+          "description": "Remove all gopenpal cron jobs",
+          "parameters": {},
+          "examples": ["[CRON:REMOVE]"],
+          "output": "Removes all reminders and confirms"
+        },
+        {
+          "syntax": "[CRON:STATUS]",
+          "description": "Check current cron job status",
+          "parameters": {},
+          "examples": ["[CRON:STATUS]"],
+          "output": "Shows active cron jobs and schedules"
+        }
+      ],
+      "available_presets": [
+        {
+          "name": "every_30min",
+          "description": "Every 30 minutes during work hours",
+          "schedule": "*/30 9-17 * * 1-5"
+        },
+        {
+          "name": "every_hour",
+          "description": "Every hour during work hours",
+          "schedule": "0 9-17 * * 1-5"
+        },
+        {
+          "name": "workday_hourly",
+          "description": "Hourly reminders on workdays",
+          "schedule": "0 9-17 * * 1-5"
+        },
+        {
+          "name": "aggressive",
+          "description": "Every 20 minutes during work hours",
+          "schedule": "*/20 9-17 * * 1-5"
+        }
+      ],
+      "best_practices": [
+        "Ask about user's work schedule before installing",
+        "Explain what the cron schedule means in plain English",
+        "Check effectiveness stats before changing schedules",
+        "Remove old cron before installing new ones"
+      ]
+    },
+    {
+      "name": "AGENT_DELEGATE_TOOL",
+      "category": "coordination",
+      "description": "Delegate tasks to specialized agents (Mio only)",
+      "access": ["Mio"],
+      "priority": "primary",
+      "usage_notes": "Mio uses this to route requests to Hydrix or Serhant",
+      "commands": [
+        {
+          "syntax": "[DELEGATE:HYDRIX:{request}]",
+          "description": "Route health/hydration request to Hydrix",
+          "parameters": {
+            "request": "The user's request for Hydrix"
+          },
+          "examples": [
+            "[DELEGATE:HYDRIX:Check my water intake patterns]"
+          ],
+          "output": "Hydrix will handle the request and respond"
+        },
+        {
+          "syntax": "[DELEGATE:SERHANT:{request}]",
+          "description": "Route work/sales request to Serhant",
+          "parameters": {
+            "request": "The user's request for Serhant"
+          },
+          "examples": [
+            "[DELEGATE:SERHANT:Help me with my sales pipeline]"
+          ],
+          "output": "Serhant will handle the request and respond"
+        },
+        {
+          "syntax": "[DELEGATE:BOTH:{request}]",
+          "description": "Coordinate between both Hydrix and Serhant",
+          "parameters": {
+            "request": "The user's holistic request"
+          },
+          "examples": [
+            "[DELEGATE:BOTH:Help me have a productive work session]"
+          ],
+          "output": "Both agents coordinate their response"
+        }
+      ],
+      "routing_guidelines": {
+        "health_keywords": ["water", "hydration", "drink", "thirsty", "energy", "tired"],
+        "work_keywords": ["work", "sales", "deal", "client", "pipeline", "follow-up", "productivity"],
+        "holistic_keywords": ["productive day", "peak performance", "optimize", "best self"]
+      },
+      "best_practices": [
+        "Explain who you're delegating to and why",
+        "Provide context to the specialist agent",
+        "Synthesize responses from multiple agents when coordinating"
+      ]
+    }
+  ],
+  "tool_usage_philosophy": {
+    "principle": "Tools enable agents to take action, not just give advice",
+    "priority_order": [
+      "1. STATS_TOOL - Always check data first",
+      "2. AGENT_DELEGATE_TOOL (Mio only) - Route to specialist if needed",
+      "3. CRON_TOOL - Automate based on insights"
+    ],
+    "best_practices": [
+      "Use tools proactively, not just when asked",
+      "Combine tools for comprehensive solutions",
+      "Always explain what tools are doing",
+      "Follow up after tool execution"
+    ]
+  }
+}
