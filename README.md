@@ -36,22 +36,41 @@ cargo install --path .
 
 ## Setup
 
-1. **Initialize the database**:
+### Quick Start
+
+Use the automated startup script:
 ```bash
-gopenpal init
+# Copy and configure environment
+cp .env.example .env
+# Edit .env and add your OPENROUTER_API_KEY
+
+# Run the daily startup script
+./start-day.sh
 ```
 
-2. **Set your OpenRouter API key**:
+### Manual Setup
+
+1. **Configure environment variables**:
+```bash
+# Copy the example environment file
+cp .env.example .env
+
+# Edit .env and add your OpenRouter API key
+# You can get one from: https://openrouter.ai/keys
+```
+
+Alternatively, set environment variables directly:
 ```bash
 export OPENROUTER_API_KEY="your-api-key-here"
+export GOPENPAL_MODEL="anthropic/claude-3.5-sonnet"
 
 # Add to your shell profile for persistence (~/.zshrc, ~/.bashrc, etc.)
 echo 'export OPENROUTER_API_KEY="your-api-key-here"' >> ~/.zshrc
 ```
 
-3. **Optional: Configure default model**:
+2. **Initialize the database**:
 ```bash
-export GOPENPAL_MODEL="anthropic/claude-3.5-sonnet"
+gopenpal init
 ```
 
 ## Usage
