@@ -272,6 +272,66 @@ Clear chat history:
 gopenpal chat clear
 ```
 
+### Agent Interactions
+
+**List All Agents:**
+```bash
+gopenpal agent list
+```
+
+**Get Agent Information:**
+```bash
+gopenpal agent info Hydrix
+gopenpal agent info Serhant
+```
+
+**Trigger a Message from an Agent:**
+```bash
+# Get a random message from Hydrix
+gopenpal agent message Hydrix
+
+# Get a random message from Serhant
+gopenpal agent message Serhant
+```
+
+**Start Agent Daemon (Background Proactive Messages):**
+```bash
+# Start daemon for all agents (checks every 45 minutes)
+gopenpal agent daemon
+
+# Start with custom interval (60 minutes)
+gopenpal agent daemon --interval 60
+
+# Start for specific agent
+gopenpal agent daemon --agent Hydrix
+```
+
+**Check Relationship Status:**
+```bash
+gopenpal agent relationship Hydrix
+gopenpal agent relationship Serhant
+```
+
+**View Unlocked Lore:**
+```bash
+# View all unlocked lore
+gopenpal agent lore
+
+# Filter by category
+gopenpal agent lore --category agent_history
+gopenpal agent lore --category world_building
+gopenpal agent lore --category secrets
+```
+
+**View Achievements:**
+```bash
+# View all achievements
+gopenpal agent achievements
+
+# View only unlocked achievements
+gopenpal agent achievements --unlocked
+```
+
 ## Configuration
 
 ### Database Location

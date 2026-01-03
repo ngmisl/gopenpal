@@ -20,8 +20,10 @@ use std::path::PathBuf;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
+use agent_daemon::{AgentDaemon, AgentDaemonConfig};
+use agents::AgentSystem;
 use chat::ChatSession;
-use cli::{ChatCommands, Cli, Commands, ReminderCommands, WaterCommands};
+use cli::{AgentCommands, ChatCommands, Cli, Commands, ReminderCommands, WaterCommands};
 use db::Database;
 use openrouter::OpenRouterClient;
 use reminder::ReminderService;
@@ -94,6 +96,11 @@ async fn run() -> anyhow::Result<()> {
         Commands::Chat { action } => {
             db.migrate().await?;
             handle_chat_command(&db, action).await?;
+        }
+
+        Commands::Agent { action } => {
+            db.migrate().await?;
+            handle_agent_command(&db, action).await?;
         }
     }
 
@@ -300,6 +307,185 @@ async fn handle_chat_command(db: &Database, action: Option<ChatCommands>) -> any
         Some(ChatCommands::Clear) => {
             db.clear_chat_history().await?;
             println!("Chat history cleared");
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle agent commands.
+async fn handle_agent_command(db: &Database, action: AgentCommands) -> anyhow::Result<()> {
+    let agent_system = AgentSystem::new(db.clone());
+
+    match action {
+        AgentCommands::List => {
+            println!("🌊⚡ Available Agents:\n");
+
+            // Show Hydrix
+            if let Some(hydrix) = agent_system.get_agent("Hydrix").await? {
+                println!("🌊 {} - {}", hydrix.name, hydrix.title);
+                println!("   Mood: {} | Relationship: Level {}",
+                    hydrix.current_mood, hydrix.relationship_level);
+                if let Some(backstory) = &hydrix.backstory {
+                    let preview = backstory.chars().take(100).collect::<String>();
+                    println!("   {}...\n", preview);
+                }
+            }
+
+            // Show Serhant
+            if let Some(serhant) = agent_system.get_agent("Serhant").await? {
+                println!("⚡ {} - {}", serhant.name, serhant.title);
+                println!("   Mood: {} | Relationship: Level {}",
+                    serhant.current_mood, serhant.relationship_level);
+                if let Some(backstory) = &serhant.backstory {
+                    let preview = backstory.chars().take(100).collect::<String>();
+                    println!("   {}...\n", preview);
+                }
+            }
+        }
+
+        AgentCommands::Info { agent } => {
+            let agent_data = agent_system.get_agent(&agent).await?
+                .context(format!("Agent '{}' not found", agent))?;
+
+            let icon = if agent == "Hydrix" { "🌊" } else { "⚡" };
+            println!("\n{} {} - {}\n", icon, agent_data.name, agent_data.title);
+            println!("Personality: {}", agent_data.personality_type);
+            println!("Current Mood: {}", agent_data.current_mood);
+            println!("Relationship Level: {}", agent_data.relationship_level);
+
+            if let Some(last_interaction) = agent_data.last_interaction {
+                println!("Last Interaction: {}", last_interaction.format("%Y-%m-%d %H:%M"));
+            }
+
+            if let Some(backstory) = agent_data.backstory {
+                println!("\nBackstory:");
+                println!("{}", backstory);
+            }
+        }
+
+        AgentCommands::Message { agent } => {
+            println!("🌊⚡ Triggering message from {}...\n", agent);
+
+            let daemon = AgentDaemon::with_defaults(db.clone());
+            let message = daemon.send_one_message(&agent).await?;
+
+            println!("✨ {}: {}", agent, message);
+        }
+
+        AgentCommands::Daemon { agent, interval } => {
+            println!("🌊⚡ Starting agent daemon...");
+            println!("Interval: {} minutes", interval);
+            println!("Press Ctrl+C to stop\n");
+
+            let config = AgentDaemonConfig {
+                base_interval_minutes: interval,
+                randomness: 0.3,
+                message_probability: 0.4,
+            };
+
+            let daemon = AgentDaemon::new(db.clone(), config);
+
+            if let Some(agent_name) = agent {
+                println!("Running daemon for: {}", agent_name);
+            } else {
+                println!("Running daemon for all agents");
+            }
+
+            daemon.run().await?;
+        }
+
+        AgentCommands::Relationship { agent } => {
+            let agent_data = agent_system.get_agent(&agent).await?
+                .context(format!("Agent '{}' not found", agent))?;
+
+            println!("\n{} Relationship Status\n", agent);
+            println!("Level: {}", agent_data.relationship_level);
+            println!("Current Mood: {}", agent_data.current_mood);
+
+            if let Some(last_interaction) = agent_data.last_interaction {
+                println!("Last Interaction: {}", last_interaction.format("%Y-%m-%d %H:%M"));
+            }
+
+            // Show what lore is unlocked at this level
+            let lore = agent_system.get_unlocked_lore().await?;
+            let agent_lore: Vec<_> = lore.iter()
+                .filter(|l| l.title.contains(&agent) || l.category.contains("world_building"))
+                .collect();
+
+            if !agent_lore.is_empty() {
+                println!("\nUnlocked Lore Entries: {}", agent_lore.len());
+            }
+
+            // Show next milestone
+            let next_milestone = ((agent_data.relationship_level / 10) + 1) * 10;
+            println!("\nNext Milestone: Level {}", next_milestone);
+        }
+
+        AgentCommands::Lore { category } => {
+            let lore = agent_system.get_unlocked_lore().await?;
+
+            let filtered: Vec<_> = if let Some(cat) = category {
+                lore.iter().filter(|l| l.category == cat).collect()
+            } else {
+                lore.iter().collect()
+            };
+
+            if filtered.is_empty() {
+                println!("No lore unlocked yet. Build relationships with agents to unlock their stories!");
+                return Ok(());
+            }
+
+            println!("\n📜 Unlocked Lore\n");
+            for entry in filtered {
+                println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                println!("📖 {}", entry.title);
+                println!("Category: {}", entry.category);
+                if let Some(unlocked_at) = entry.unlocked_at {
+                    println!("Unlocked: {}", unlocked_at.format("%Y-%m-%d"));
+                }
+                println!("\n{}\n", entry.content);
+            }
+        }
+
+        AgentCommands::Achievements { unlocked } => {
+            use sqlx::Row;
+
+            let query = if unlocked {
+                "SELECT * FROM achievements WHERE unlocked = 1 ORDER BY unlocked_at DESC"
+            } else {
+                "SELECT * FROM achievements ORDER BY unlocked DESC, achievement_name"
+            };
+
+            let achievements = sqlx::query(query)
+                .fetch_all(db.pool())
+                .await?;
+
+            if achievements.is_empty() {
+                println!("No achievements yet!");
+                return Ok(());
+            }
+
+            println!("\n🏆 Achievements\n");
+            for ach in achievements {
+                let name: String = ach.get("achievement_name");
+                let description: Option<String> = ach.get("description");
+                let is_unlocked: bool = ach.get("unlocked");
+
+                let icon = if is_unlocked { "✅" } else { "🔒" };
+                println!("{} {}", icon, name);
+
+                if let Some(desc) = description {
+                    println!("   {}", desc);
+                }
+
+                if is_unlocked {
+                    if let Some(unlocked_at) = ach.try_get::<chrono::DateTime<chrono::Utc>, _>("unlocked_at").ok() {
+                        println!("   Unlocked: {}", unlocked_at.format("%Y-%m-%d"));
+                    }
+                }
+                println!();
+            }
         }
     }
 

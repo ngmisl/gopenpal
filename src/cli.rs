@@ -45,6 +45,12 @@ pub enum Commands {
         action: Option<ChatCommands>,
     },
 
+    /// Interact with AI agents (Hydrix, Serhant)
+    Agent {
+        #[command(subcommand)]
+        action: AgentCommands,
+    },
+
     /// Initialize database and configuration
     Init,
 }
@@ -146,4 +152,53 @@ pub enum ChatCommands {
 
     /// Clear chat history
     Clear,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AgentCommands {
+    /// Show agent information and status
+    Info {
+        /// Agent name (Hydrix or Serhant)
+        agent: String,
+    },
+
+    /// List all agents
+    List,
+
+    /// Trigger a message from an agent
+    Message {
+        /// Agent name (Hydrix or Serhant)
+        agent: String,
+    },
+
+    /// Start agent daemon (runs in background)
+    Daemon {
+        /// Agent to run (default: both)
+        #[arg(short, long)]
+        agent: Option<String>,
+
+        /// Interval in minutes between checks
+        #[arg(short, long, default_value = "45")]
+        interval: u64,
+    },
+
+    /// View agent relationship status
+    Relationship {
+        /// Agent name (Hydrix or Serhant)
+        agent: String,
+    },
+
+    /// View unlocked lore
+    Lore {
+        /// Filter by category (agent_history, world_building, secrets)
+        #[arg(short, long)]
+        category: Option<String>,
+    },
+
+    /// View achievements
+    Achievements {
+        /// Show only unlocked achievements
+        #[arg(short, long)]
+        unlocked: bool,
+    },
 }
