@@ -4,14 +4,14 @@
 //! working directory and its subdirectories, preventing agents from accessing
 //! files outside the designated workspace.
 
-#![allow(dead_code)]
-
 use std::path::{Path, PathBuf};
 use std::env;
+use std::fs;
+use serde::{Deserialize, Serialize};
 use crate::error::{AppError, Result};
 
 /// Security configuration for path validation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityConfig {
     /// Root directory - agents cannot access files outside this
     pub sandbox_root: PathBuf,
@@ -173,6 +173,48 @@ impl SecurityConfig {
                     path.as_ref().display()
                 ))
             })
+    }
+
+    /// Load security configuration from a JSON file.
+    ///
+    /// If the file doesn't exist, returns the default configuration.
+    pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let path = path.as_ref();
+
+        if !path.exists() {
+            return Ok(Self::default());
+        }
+
+        let content = fs::read_to_string(path)
+            .map_err(|e| AppError::Security(format!("Failed to read security config: {}", e)))?;
+
+        let mut config: Self = serde_json::from_str(&content)
+            .map_err(|e| AppError::Security(format!("Failed to parse security config: {}", e)))?;
+
+        // Resolve relative sandbox_root to absolute path
+        if config.sandbox_root == PathBuf::from(".") || config.sandbox_root.is_relative() {
+            config.sandbox_root = env::current_dir()
+                .map_err(|e| AppError::Security(format!("Failed to get current directory: {}", e)))?;
+        }
+
+        Ok(config)
+    }
+
+    /// Save security configuration to a JSON file.
+    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let path = path.as_ref();
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let content = serde_json::to_string_pretty(self)
+            .map_err(|e| AppError::Security(format!("Failed to serialize security config: {}", e)))?;
+
+        fs::write(path, content)
+            .map_err(|e| AppError::Security(format!("Failed to write security config: {}", e)))?;
+
+        Ok(())
     }
 }
 

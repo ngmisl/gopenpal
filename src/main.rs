@@ -28,6 +28,7 @@ use cli::{AgentCommands, ChatCommands, Cli, Commands, ReminderCommands, WaterCom
 use db::Database;
 use openrouter::OpenRouterClient;
 use reminder::ReminderService;
+use security::SecurityConfig;
 
 #[tokio::main]
 async fn main() {
@@ -55,9 +56,22 @@ async fn run() -> anyhow::Result<()> {
 
     info!("Starting GopenPal");
 
+    // Load security configuration
+    let security_config = SecurityConfig::load_from_file("configs/security.json")
+        .context("Failed to load security configuration")?;
+
     // Expand tilde in database path
     // This is a Python-like convenience for home directory paths
     let db_path = expand_tilde(&cli.database);
+
+    // Validate database path is within sandbox (use is_path_safe for non-existent files)
+    if !security_config.is_path_safe(&db_path) {
+        return Err(anyhow::anyhow!(
+            "Database path '{}' is outside the allowed sandbox directory",
+            db_path.display()
+        ));
+    }
+
     let db_url = format!("sqlite://{}", db_path.display());
 
     // Connect to database

@@ -1,0 +1,11 @@
+{
+  "sandbox_root": ".",
+  "enforce_sandbox": true,
+  "allowed_subdirs": [
+    "world",
+    "configs",
+    "migrations",
+    ".gopenpal_pids",
+    ".gopenpal_logs"
+  ]
+}

@@ -28,6 +28,48 @@ GopenPal is a CLI application that helps you maintain healthy work habits throug
 - **Persistent History**: All data stored locally in SQLite database
 - **Configurable**: Customize reminder intervals, work hours, and AI models
 - **Terminal UI**: Rich interactive dashboard for easy management
+- **Security Sandbox**: Path validation ensures agents can only access files within the workspace
+
+## Security 🔒
+
+GopenPal includes a **security sandbox** that restricts all file operations to the current working directory and designated subdirectories. This prevents agents from accessing sensitive files outside the workspace.
+
+**Security Features:**
+- **Path Validation**: All file paths are validated before access
+- **Directory Traversal Protection**: Paths with `..` are normalized and validated
+- **Symlink Resolution**: Symlinks are followed and validated against the sandbox
+- **Configurable Enforcement**: Can be disabled for development/testing via `configs/security.json`
+
+**Protected Directories:**
+- `world/` - Database and user data
+- `configs/` - Configuration files
+- `migrations/` - Database migration scripts
+- `.gopenpal_pids/` - Process ID tracking
+- `.gopenpal_logs/` - Agent daemon logs
+
+**Example:**
+```bash
+# ✅ Allowed: Database within workspace
+gopenpal --database world/gopenpal.db init
+
+# ❌ Blocked: Path outside sandbox
+gopenpal --database /tmp/outside.db init
+# Error: Database path '/tmp/outside.db' is outside the allowed sandbox directory
+
+# ❌ Blocked: Parent directory escape
+gopenpal --database ../outside.db init
+# Error: Database path '../outside.db' is outside the allowed sandbox directory
+```
+
+**Configuration:**
+Edit `configs/security.json` to customize sandbox settings:
+```json
+{
+  "sandbox_root": ".",
+  "enforce_sandbox": true,
+  "allowed_subdirs": ["world", "configs", "migrations"]
+}
+```
 
 ## Meet Your Agents 🌊⚡
 
