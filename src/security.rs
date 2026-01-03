@@ -4,6 +4,8 @@
 //! working directory and its subdirectories, preventing agents from accessing
 //! files outside the designated workspace.
 
+#![allow(dead_code)]
+
 use std::path::{Path, PathBuf};
 use std::env;
 use crate::error::{AppError, Result};
