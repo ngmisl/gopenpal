@@ -8,6 +8,7 @@ mod db;
 mod error;
 mod openrouter;
 mod reminder;
+mod tui;
 
 use anyhow::Context;
 use chrono::NaiveTime;
@@ -60,14 +61,21 @@ async fn run() -> anyhow::Result<()> {
 
     // Handle commands
     match cli.command {
+        Commands::Tui => {
+            db.migrate().await?;
+            let api_key = std::env::var("OPENROUTER_API_KEY").ok();
+            tui::run_tui(db, api_key).await?;
+        }
+
         Commands::Init => {
             info!("Initializing database");
             db.migrate().await.context("Failed to run migrations")?;
             println!("Database initialized successfully at {}", db_path.display());
             println!("\nNext steps:");
             println!("1. Set your OpenRouter API key: export OPENROUTER_API_KEY=your-key");
-            println!("2. Start water reminders: gopenpal reminder start");
-            println!("3. Chat with AI: gopenpal chat");
+            println!("2. Launch TUI: gopenpal tui");
+            println!("3. Or use CLI: gopenpal water log 250");
+            println!("4. Set up cron job: */30 * * * * gopenpal reminder check");
         }
 
         Commands::Water { action } => {
@@ -139,6 +147,54 @@ async fn handle_reminder_command(db: &Database, action: ReminderCommands) -> any
 
             let service = ReminderService::new(db.clone());
             service.run().await?;
+        }
+
+        ReminderCommands::Check => {
+            // Cron-compatible command: check once and send reminder if needed
+            use chrono::Local;
+            use notify_rust::Notification;
+
+            let settings = db.get_reminder_settings().await?;
+
+            if !settings.enabled {
+                return Ok(());
+            }
+
+            let now = Local::now();
+            let current_time = now.time();
+
+            // Check if we're within work hours
+            if current_time < settings.work_hours_start || current_time >= settings.work_hours_end {
+                return Ok(());
+            }
+
+            // Check if it's a work day
+            let weekday = now.format("%a").to_string();
+            if !settings.work_days.contains(&weekday) {
+                return Ok(());
+            }
+
+            // Send reminder
+            let total_ml = db.get_today_total_ml().await?;
+            let total_liters = total_ml as f64 / 1000.0;
+
+            let message = if total_ml == 0 {
+                "Time to drink some water! You haven't logged any water today.".to_string()
+            } else {
+                format!(
+                    "Time to drink some water! You've had {:.1}L today.",
+                    total_liters
+                )
+            };
+
+            Notification::new()
+                .summary("Water Reminder")
+                .body(&message)
+                .icon("dialog-information")
+                .timeout(5000)
+                .show()?;
+
+            info!("Sent water reminder at {}", now.format("%H:%M"));
         }
 
         ReminderCommands::Status => {

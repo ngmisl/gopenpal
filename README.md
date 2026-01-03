@@ -56,7 +56,21 @@ export GOPENPAL_MODEL="anthropic/claude-3.5-sonnet"
 
 ## Usage
 
-### Water Tracking
+### Terminal User Interface (TUI)
+
+Launch the interactive TUI dashboard:
+```bash
+gopenpal tui
+```
+
+**TUI Features:**
+- 📊 **Dashboard**: Overview of your water intake with progress bar
+- 💧 **Water Tracking**: Log water intake interactively (press `w` to edit)
+- 💬 **Chat**: Interactive AI chat interface (press `c` to chat)
+- ⚙️ **Settings**: View reminder configuration
+- **Navigation**: Use `←/→` arrows to switch tabs, `q` to quit
+
+### Water Tracking (CLI)
 
 Log water intake (default: 250ml):
 ```bash
@@ -71,10 +85,39 @@ gopenpal water today
 
 ### Water Reminders
 
+**Option 1: Cron Job (Recommended)**
+
+Add to your crontab with `crontab -e`:
+```bash
+# Check every 30 minutes
+*/30 * * * * $HOME/.cargo/bin/gopenpal reminder check
+```
+
+See `examples/crontab.example` for more cron configurations.
+
+**Option 2: Systemd Timer (Linux)**
+
+```bash
+# Copy service and timer files
+cp examples/gopenpal-reminder.service ~/.config/systemd/user/
+cp examples/gopenpal-reminder.timer ~/.config/systemd/user/
+
+# Enable and start the timer
+systemctl --user enable --now gopenpal-reminder.timer
+
+# Check status
+systemctl --user status gopenpal-reminder.timer
+systemctl --user list-timers
+```
+
+**Option 3: Foreground Service**
+
 Start the reminder service (runs in foreground):
 ```bash
 gopenpal reminder start
 ```
+
+**Configuration:**
 
 Check reminder settings:
 ```bash
@@ -118,34 +161,6 @@ gopenpal chat history --limit 20
 Clear chat history:
 ```bash
 gopenpal chat clear
-```
-
-## Running as a Background Service
-
-### Using systemd (Linux)
-
-Create a systemd service file at `~/.config/systemd/user/gopenpal-reminder.service`:
-
-```ini
-[Unit]
-Description=GopenPal Water Reminder Service
-After=graphical.target
-
-[Service]
-Type=simple
-ExecStart=/path/to/gopenpal reminder start
-Restart=on-failure
-Environment="GOPENPAL_DB=%h/.gopenpal/gopenpal.db"
-
-[Install]
-WantedBy=default.target
-```
-
-Enable and start the service:
-```bash
-systemctl --user enable gopenpal-reminder
-systemctl --user start gopenpal-reminder
-systemctl --user status gopenpal-reminder
 ```
 
 ## Configuration

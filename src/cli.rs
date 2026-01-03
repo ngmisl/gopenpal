@@ -24,6 +24,9 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
+    /// Launch interactive Terminal User Interface (TUI)
+    Tui,
+
     /// Water intake tracking commands
     Water {
         #[command(subcommand)]
@@ -74,6 +77,9 @@ pub enum WaterCommands {
 pub enum ReminderCommands {
     /// Start reminder service (runs in foreground)
     Start,
+
+    /// Check if reminder should be sent (for cron jobs)
+    Check,
 
     /// Show current reminder settings
     Status,

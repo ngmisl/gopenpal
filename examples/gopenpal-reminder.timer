@@ -1,0 +1,17 @@
+[Unit]
+Description=GopenPal Water Reminder Timer
+Documentation=https://github.com/ngmisl/gopenpal
+Requires=gopenpal-reminder.service
+
+[Timer]
+# Run every 30 minutes
+OnCalendar=*:0/30
+
+# Run immediately if the timer was missed (e.g., computer was asleep)
+Persistent=true
+
+# Randomize execution time by up to 1 minute to avoid spikes
+RandomizedDelaySec=1min
+
+[Install]
+WantedBy=timers.target
