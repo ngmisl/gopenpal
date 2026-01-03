@@ -11,6 +11,7 @@ use crossterm::{
 use serde_json::Value;
 use std::fs;
 use std::io::{self, Write};
+use std::path::PathBuf;
 use tracing::info;
 
 use crate::agents::AgentSystem;
@@ -904,7 +905,24 @@ fn execute_ripgrep_search(pattern: &str, search_path: &str) -> String {
 
 /// Read file contents with optional line range.
 fn read_file_lines(file_path: &str, line_range: Option<(usize, usize)>) -> String {
-    match fs::read_to_string(file_path) {
+    // Validate path before reading
+    let security_config = match SecurityConfig::load_from_file("configs/security.json") {
+        Ok(config) => config,
+        Err(_) => SecurityConfig::default(),
+    };
+
+    // Use validate_path for stricter validation (follows symlinks, canonicalizes)
+    let validated_path = match security_config.validate_path(file_path) {
+        Ok(path) => path,
+        Err(e) => return format!("Security error: {}", e),
+    };
+
+    // Get relative path for display (cleaner output)
+    let display_path = security_config
+        .get_relative_path(file_path)
+        .unwrap_or_else(|_| PathBuf::from(file_path));
+
+    match fs::read_to_string(&validated_path) {
         Ok(contents) => {
             let lines: Vec<&str> = contents.lines().collect();
 
@@ -926,7 +944,7 @@ fn read_file_lines(file_path: &str, line_range: Option<(usize, usize)>) -> Strin
 
                 format!(
                     "=== {} (lines {}-{}) ===\n\n{}",
-                    file_path,
+                    display_path.display(),
                     start,
                     end,
                     selected_lines.join("\n")
@@ -946,13 +964,13 @@ fn read_file_lines(file_path: &str, line_range: Option<(usize, usize)>) -> Strin
                 if total_lines > max_lines {
                     format!(
                         "=== {} (showing first {} of {} lines) ===\n\n{}\n\n... (file truncated)",
-                        file_path, max_lines, total_lines,
+                        display_path.display(), max_lines, total_lines,
                         display_lines.join("\n")
                     )
                 } else {
                     format!(
                         "=== {} ({} lines) ===\n\n{}",
-                        file_path,
+                        display_path.display(),
                         total_lines,
                         display_lines.join("\n")
                     )

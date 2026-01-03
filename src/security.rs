@@ -177,12 +177,20 @@ impl SecurityConfig {
 
     /// Load security configuration from a JSON file.
     ///
-    /// If the file doesn't exist, returns the default configuration.
+    /// If the file doesn't exist, creates and saves a default configuration.
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
 
         if !path.exists() {
-            return Ok(Self::default());
+            // Create default config with current directory as sandbox root
+            let current_dir = env::current_dir()
+                .map_err(|e| AppError::Security(format!("Failed to get current directory: {}", e)))?;
+            let config = Self::new(current_dir);
+
+            // Save the default config for future use
+            config.save_to_file(path)?;
+
+            return Ok(config);
         }
 
         let content = fs::read_to_string(path)
@@ -196,6 +204,15 @@ impl SecurityConfig {
             config.sandbox_root = env::current_dir()
                 .map_err(|e| AppError::Security(format!("Failed to get current directory: {}", e)))?;
         }
+
+        // Validate that allowed_subdirs are safe paths
+        let subdir_paths: Vec<PathBuf> = config.allowed_subdirs.iter()
+            .map(|p| config.sandbox_root.join(p))
+            .collect();
+
+        // Use validate_paths to ensure all subdirs are within sandbox
+        // This validates the configuration integrity
+        let _ = config.validate_paths(&subdir_paths)?;
 
         Ok(config)
     }

@@ -13,9 +13,9 @@ mod openrouter;
 mod reminder;
 mod security;
 mod tui;
+mod utils;
 
 use anyhow::Context;
-use chrono::NaiveTime;
 use clap::Parser;
 use std::path::PathBuf;
 use tracing::{error, info};
@@ -250,11 +250,11 @@ async fn handle_reminder_command(db: &Database, action: ReminderCommands) -> any
                 settings.interval_minutes = i;
             }
             if let Some(s) = start {
-                settings.work_hours_start = NaiveTime::parse_from_str(&s, "%H:%M")
+                settings.work_hours_start = utils::parse_time(&s)
                     .context("Invalid time format, use HH:MM")?;
             }
             if let Some(e) = end {
-                settings.work_hours_end = NaiveTime::parse_from_str(&e, "%H:%M")
+                settings.work_hours_end = utils::parse_time(&e)
                     .context("Invalid time format, use HH:MM")?;
             }
             if let Some(d) = days {
@@ -272,7 +272,7 @@ async fn handle_reminder_command(db: &Database, action: ReminderCommands) -> any
 /// Handle chat commands.
 async fn handle_chat_command(db: &Database, action: Option<ChatCommands>) -> anyhow::Result<()> {
     // Get API key from environment
-    let api_key = std::env::var("OPENROUTER_API_KEY")
+    let api_key = utils::get_required_env("OPENROUTER_API_KEY")
         .context("OPENROUTER_API_KEY environment variable not set")?;
 
     let client = OpenRouterClient::new(api_key);
@@ -282,8 +282,7 @@ async fn handle_chat_command(db: &Database, action: Option<ChatCommands>) -> any
             let model = if let Some(ChatCommands::Interactive { model }) = action {
                 model
             } else {
-                std::env::var("GOPENPAL_MODEL")
-                    .unwrap_or_else(|_| "anthropic/claude-3.5-sonnet".to_string())
+                utils::get_env_or("GOPENPAL_MODEL", "anthropic/claude-3.5-sonnet")
             };
 
             let session = ChatSession::new(db.clone(), client, model);

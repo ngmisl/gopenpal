@@ -10,7 +10,6 @@ use thiserror::Error;
 /// This enum represents all possible errors that can occur in the application.
 /// Each variant provides context about what went wrong.
 #[derive(Error, Debug)]
-#[allow(dead_code)]
 pub enum AppError {
     /// Database operation failed
     #[error("Database error: {0}")]
