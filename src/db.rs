@@ -22,6 +22,13 @@ pub struct Database {
 }
 
 impl Database {
+    /// Get a reference to the underlying connection pool.
+    ///
+    /// This is used by other modules that need direct pool access.
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
+
     /// Create a new database connection.
     ///
     /// # Arguments
@@ -66,6 +73,11 @@ impl Database {
 
         let activity_logging_sql = include_str!("../migrations/20260103_activity_logging.sql");
         sqlx::query(activity_logging_sql)
+            .execute(&self.pool)
+            .await?;
+
+        let agent_world_sql = include_str!("../migrations/20260103_agent_world.sql");
+        sqlx::query(agent_world_sql)
             .execute(&self.pool)
             .await?;
 

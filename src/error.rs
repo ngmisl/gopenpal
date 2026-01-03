@@ -47,6 +47,10 @@ pub enum AppError {
     /// Invalid time format
     #[error("Time parse error: {0}")]
     TimeParse(String),
+
+    /// Resource not found
+    #[error("Not found: {0}")]
+    NotFound(String),
 }
 
 /// Specialized Result type for application errors.

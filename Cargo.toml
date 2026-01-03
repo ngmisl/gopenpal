@@ -47,5 +47,8 @@ ratatui = "0.29"
 # Home directory detection
 dirs = "5.0"
 
+# Random number generation
+rand = "0.8"
+
 [dev-dependencies]
 mockito = "1.6"
