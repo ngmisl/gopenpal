@@ -4,6 +4,7 @@
 
 mod chat;
 mod cli;
+mod cron;
 mod db;
 mod error;
 mod openrouter;

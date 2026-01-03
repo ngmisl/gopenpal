@@ -84,8 +84,14 @@ gopenpal tui
 
 **TUI Features:**
 - 📊 **Dashboard**: Overview of your water intake with progress bar
-- 💧 **Water Tracking**: Log water intake interactively (press `w` to edit)
+- 💧 **Water**: Log water intake interactively (press `w` to edit)
 - 💬 **Chat**: Interactive AI chat interface (press `c` to chat)
+  - 🤖 **AI Cron Management**: Ask AI to set up/modify/remove cron jobs
+  - Example: "Set up reminders every 30 minutes"
+- ⏰ **Cron**: Manage automated reminders with visual presets
+  - Browse schedule presets with `↑/↓`
+  - Install/update with `Enter`
+  - Remove with `r`
 - ⚙️ **Settings**: View reminder configuration
 - **Navigation**: Use `←/→` arrows to switch tabs, `q` to quit
 

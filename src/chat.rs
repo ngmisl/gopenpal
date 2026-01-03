@@ -10,6 +10,7 @@ use crossterm::{
 use std::io::{self, Write};
 use tracing::info;
 
+use crate::cron::CronManager;
 use crate::db::Database;
 use crate::error::Result;
 use crate::openrouter::{Message, OpenRouterClient};
@@ -61,12 +62,26 @@ impl ChatSession {
             })
             .collect();
 
-        // Add system message for health/work assistant context
+        // Add system message for health/work assistant context with tools
         if messages.is_empty() {
             let system_msg = Message::system(
                 "You are GopenPal, a helpful AI assistant focused on health and productivity. \
                  You help users maintain healthy habits like staying hydrated, taking breaks, \
-                 and managing their work-life balance. Be concise, friendly, and supportive.",
+                 and managing their work-life balance.\n\n\
+                 You have access to the CRON_TOOL to manage automated water reminders.\n\n\
+                 CRON_TOOL commands (output these EXACTLY as shown when user requests cron changes):\n\
+                 - [CRON:INSTALL:*/30 * * * *] - Install cron job with schedule\n\
+                 - [CRON:REMOVE] - Remove cron job\n\
+                 - [CRON:STATUS] - Check cron job status\n\n\
+                 Available schedules:\n\
+                 - */15 * * * * (every 15 minutes)\n\
+                 - */30 * * * * (every 30 minutes)\n\
+                 - 0 * * * * (every hour)\n\
+                 - 0 */2 * * * (every 2 hours)\n\
+                 - */30 9-17 * * 1-5 (every 30min, work hours only)\n\n\
+                 When user asks to set up/change/remove reminders, use the CRON_TOOL.\n\
+                 Always explain what you're doing and confirm the action.\n\
+                 Be concise, friendly, and supportive in all other responses.",
             );
             messages.insert(0, system_msg);
         }
@@ -120,7 +135,17 @@ impl ChatSession {
                 .await?;
 
             let assistant_message = &response.choices[0].message;
-            println!("{}\n", assistant_message.content);
+
+            // Process and execute cron commands
+            let (display_content, cron_result) = process_cron_commands(&assistant_message.content);
+            println!("{}", display_content);
+
+            if let Some(result) = cron_result {
+                print_colored("\n[CRON] ", Color::Yellow)?;
+                println!("{}\n", result);
+            } else {
+                println!();
+            }
 
             // Add assistant response to conversation
             messages.push(assistant_message.clone());
@@ -158,7 +183,23 @@ impl ChatSession {
     pub async fn send_message(&self, message: &str) -> Result<String> {
         let mut messages = vec![
             Message::system(
-                "You are GopenPal, a helpful AI assistant focused on health and productivity.",
+                "You are GopenPal, a helpful AI assistant focused on health and productivity. \
+                 You help users maintain healthy habits like staying hydrated, taking breaks, \
+                 and managing their work-life balance.\n\n\
+                 You have access to the CRON_TOOL to manage automated water reminders.\n\n\
+                 CRON_TOOL commands (output these EXACTLY as shown when user requests cron changes):\n\
+                 - [CRON:INSTALL:*/30 * * * *] - Install cron job with schedule\n\
+                 - [CRON:REMOVE] - Remove cron job\n\
+                 - [CRON:STATUS] - Check cron job status\n\n\
+                 Available schedules:\n\
+                 - */15 * * * * (every 15 minutes)\n\
+                 - */30 * * * * (every 30 minutes)\n\
+                 - 0 * * * * (every hour)\n\
+                 - 0 */2 * * * (every 2 hours)\n\
+                 - */30 9-17 * * 1-5 (every 30min, work hours only)\n\n\
+                 When user asks to set up/change/remove reminders, use the CRON_TOOL.\n\
+                 Always explain what you're doing and confirm the action.\n\
+                 Be concise, friendly, and supportive in all other responses.",
             ),
             Message::user(message),
         ];
@@ -176,18 +217,28 @@ impl ChatSession {
         let assistant_message = &response.choices[0].message;
         messages.push(assistant_message.clone());
 
+        // Process cron commands and get cleaned response
+        let (cleaned_content, cron_result) = process_cron_commands(&assistant_message.content);
+
+        // Append cron result to response if any
+        let full_response = if let Some(result) = cron_result {
+            format!("{}\n\n[CRON] {}", cleaned_content, result)
+        } else {
+            cleaned_content
+        };
+
         // Save assistant message
         let tokens_used = response.usage.as_ref().map(|u| u.total_tokens as i64);
         self.db
             .save_chat_message(
                 &assistant_message.role,
-                &assistant_message.content,
+                &full_response,
                 Some(&self.model),
                 tokens_used,
             )
             .await?;
 
-        Ok(assistant_message.content.clone())
+        Ok(full_response)
     }
 
     /// Display recent chat history.
@@ -244,6 +295,78 @@ fn print_colored(text: &str, color: Color) -> io::Result<()> {
         ResetColor
     )?;
     Ok(())
+}
+
+/// Process cron commands in AI response.
+///
+/// # Arguments
+///
+/// * `content` - The AI's response content
+///
+/// # Returns
+///
+/// Tuple of (cleaned_content, optional_cron_result)
+fn process_cron_commands(content: &str) -> (String, Option<String>) {
+    let cron = CronManager::new(None);
+    let mut result_message = None;
+    let mut cleaned = content.to_string();
+
+    // Check for CRON:STATUS command
+    if content.contains("[CRON:STATUS]") {
+        let status = match cron.is_installed() {
+            Ok(Some(line)) => format!("Cron job is installed: {}", line),
+            Ok(None) => "No cron job installed".to_string(),
+            Err(e) => format!("Error checking status: {}", e),
+        };
+        result_message = Some(status);
+        cleaned = cleaned.replace("[CRON:STATUS]", "");
+    }
+
+    // Check for CRON:REMOVE command
+    if content.contains("[CRON:REMOVE]") {
+        let result = match cron.remove() {
+            Ok(_) => "Successfully removed cron job".to_string(),
+            Err(e) => format!("Error removing cron job: {}", e),
+        };
+        result_message = Some(result);
+        cleaned = cleaned.replace("[CRON:REMOVE]", "");
+    }
+
+    // Check for CRON:INSTALL command with schedule
+    if let Some(start) = content.find("[CRON:INSTALL:") {
+        if let Some(end) = content[start..].find(']') {
+            let command = &content[start..start + end + 1];
+            let schedule = command
+                .trim_start_matches("[CRON:INSTALL:")
+                .trim_end_matches(']');
+
+            let result = match cron.is_installed() {
+                Ok(Some(_)) => {
+                    // Update existing
+                    match cron.update_schedule(schedule) {
+                        Ok(_) => format!("Updated cron job to run: {}", schedule),
+                        Err(e) => format!("Error updating cron job: {}", e),
+                    }
+                }
+                Ok(None) => {
+                    // Install new
+                    match cron.install(schedule) {
+                        Ok(_) => format!("Installed cron job to run: {}", schedule),
+                        Err(e) => format!("Error installing cron job: {}", e),
+                    }
+                }
+                Err(e) => format!("Error: {}", e),
+            };
+
+            result_message = Some(result);
+            cleaned = cleaned.replace(command, "");
+        }
+    }
+
+    // Clean up any extra whitespace
+    cleaned = cleaned.trim().to_string();
+
+    (cleaned, result_message)
 }
 
 #[cfg(test)]

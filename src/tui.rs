@@ -22,6 +22,7 @@ use tokio::sync::mpsc;
 use tracing::info;
 
 use crate::chat::ChatSession;
+use crate::cron::CronManager;
 use crate::db::Database;
 use crate::error::Result;
 use crate::openrouter::OpenRouterClient;
@@ -42,6 +43,10 @@ struct App {
     input_mode: InputMode,
     /// Scroll position for chat
     chat_scroll: u16,
+    /// Selected cron preset index
+    cron_selected: usize,
+    /// Status message for cron operations
+    cron_status: String,
 }
 
 #[derive(PartialEq)]
@@ -55,12 +60,14 @@ impl Default for App {
     fn default() -> Self {
         Self {
             current_tab: 0,
-            tabs: vec!["Dashboard", "Water Tracking", "Chat", "Settings"],
+            tabs: vec!["Dashboard", "Water", "Chat", "Cron", "Settings"],
             water_input: String::new(),
             chat_input: String::new(),
             chat_messages: Vec::new(),
             input_mode: InputMode::Normal,
             chat_scroll: 0,
+            cron_selected: 0,
+            cron_status: String::new(),
         }
     }
 }
@@ -146,6 +153,48 @@ async fn run_app(
                         }
                         KeyCode::Down if app.current_tab == 2 => {
                             app.chat_scroll = app.chat_scroll.saturating_add(1);
+                        }
+                        // Cron tab controls
+                        KeyCode::Up if app.current_tab == 3 => {
+                            app.cron_selected = app.cron_selected.saturating_sub(1);
+                        }
+                        KeyCode::Down if app.current_tab == 3 => {
+                            let presets = CronManager::presets();
+                            app.cron_selected = (app.cron_selected + 1).min(presets.len() - 1);
+                        }
+                        KeyCode::Enter if app.current_tab == 3 => {
+                            let cron = CronManager::new(None);
+                            let presets = CronManager::presets();
+                            let (_, schedule) = presets[app.cron_selected];
+
+                            match cron.is_installed() {
+                                Ok(Some(_)) => {
+                                    // Update existing
+                                    match cron.update_schedule(schedule) {
+                                        Ok(_) => {
+                                            app.cron_status = format!("Updated to: {}", schedule)
+                                        }
+                                        Err(e) => app.cron_status = format!("Error: {}", e),
+                                    }
+                                }
+                                Ok(None) => {
+                                    // Install new
+                                    match cron.install(schedule) {
+                                        Ok(_) => {
+                                            app.cron_status = format!("Installed: {}", schedule)
+                                        }
+                                        Err(e) => app.cron_status = format!("Error: {}", e),
+                                    }
+                                }
+                                Err(e) => app.cron_status = format!("Error: {}", e),
+                            }
+                        }
+                        KeyCode::Char('r') if app.current_tab == 3 => {
+                            let cron = CronManager::new(None);
+                            match cron.remove() {
+                                Ok(_) => app.cron_status = "Cron job removed".to_string(),
+                                Err(e) => app.cron_status = format!("Error: {}", e),
+                            }
                         }
                         _ => {}
                     },
@@ -251,7 +300,8 @@ fn ui(f: &mut Frame, app: &App, db: &Database) {
         0 => render_dashboard(f, chunks[1], db),
         1 => render_water_tracking(f, chunks[1], app, db),
         2 => render_chat(f, chunks[1], app),
-        3 => render_settings(f, chunks[1], db),
+        3 => render_cron(f, chunks[1], app),
+        4 => render_settings(f, chunks[1], db),
         _ => {}
     }
 }
@@ -412,6 +462,90 @@ fn render_chat(f: &mut Frame, area: Rect, app: &App) {
                 .title("Message - Press 'c' to chat, Enter to send, Esc to cancel"),
         );
     f.render_widget(input, chunks[1]);
+}
+
+/// Render the cron management tab.
+fn render_cron(f: &mut Frame, area: Rect, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(10),
+            Constraint::Min(0),
+            Constraint::Length(3),
+        ])
+        .split(area);
+
+    // Current status
+    let cron = CronManager::new(None);
+    let current_status = match cron.is_installed() {
+        Ok(Some(line)) => format!("Installed: {}", line),
+        Ok(None) => "Not installed".to_string(),
+        Err(e) => format!("Error: {}", e),
+    };
+
+    let is_installed = current_status.starts_with("Installed");
+
+    let status_text = vec![
+        Line::from(Span::styled(
+            "Cron Job Management",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::raw("Status: "),
+            Span::styled(
+                current_status,
+                Style::default().fg(if is_installed {
+                    Color::Green
+                } else {
+                    Color::Yellow
+                }),
+            ),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled("Controls:", Style::default().fg(Color::Gray))),
+        Line::from("  ↑/↓  - Select schedule preset"),
+        Line::from("  Enter - Install/Update cron job"),
+        Line::from("  r - Remove cron job"),
+    ];
+
+    let status_widget = Paragraph::new(status_text)
+        .block(Block::default().title("Status").borders(Borders::ALL))
+        .alignment(Alignment::Left);
+    f.render_widget(status_widget, chunks[0]);
+
+    // Presets list
+    let presets = CronManager::presets();
+    let items: Vec<ListItem> = presets
+        .iter()
+        .enumerate()
+        .map(|(idx, (name, schedule))| {
+            let content = format!("{} - {}", name, schedule);
+            let style = if idx == app.cron_selected {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+            ListItem::new(content).style(style)
+        })
+        .collect();
+
+    let list = List::new(items).block(
+        Block::default()
+            .title("Schedule Presets")
+            .borders(Borders::ALL),
+    );
+    f.render_widget(list, chunks[1]);
+
+    // Status message
+    let status_msg = Paragraph::new(app.cron_status.as_str())
+        .style(Style::default().fg(Color::Green))
+        .block(Block::default().borders(Borders::ALL));
+    f.render_widget(status_msg, chunks[2]);
 }
 
 /// Render the settings tab.
