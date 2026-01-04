@@ -20,10 +20,11 @@ GopenPal is a CLI application that helps you maintain healthy work habits throug
 
 - **Water Intake Tracking**: Log and monitor your daily water consumption
 - **Smart Reminders**: Desktop notifications during work hours to remind you to stay hydrated
-- **AI Chat Assistant**: Interactive chat with various LLM models through OpenRouter API
-  - **Statistics & Insights**: AI analyzes your water intake patterns and provides personalized recommendations
-  - **Pattern Analysis**: Discover your drinking habits by hour, day, and week
-  - **Cron Management**: AI can set up and manage automated reminders settings (persisted in world/cron.json)
+ - **AI Chat Assistant**: Interactive chat with various LLM models through OpenRouter API
+   - **Real-Time Streaming**: Responses appear as they're generated, just like typical LLM interfaces
+   - **Statistics & Insights**: AI analyzes your water intake patterns and provides personalized recommendations
+   - **Pattern Analysis**: Discover your drinking habits by hour, day, and week
+   - **Cron Management**: AI can set up and manage automated reminders settings (persisted in world/cron.json)
 - **Persistent Task System**: Manage tasks with simple markdown in `world/tasks.md`
 - **Comprehensive Analytics**: Track daily totals, hourly patterns, weekly trends, and reminder effectiveness
 - **Persistent History**: All data stored locally in SQLite database
@@ -308,6 +309,7 @@ gopenpal tui
 - 📊 **Dashboard**: Overview of your water intake with progress bar
 - 💧 **Water**: Log water intake interactively (press `w` to edit)
 - 💬 **Chat**: Interactive AI chat interface (press `c` to chat)
+  - 📜 **Real-Time Streaming**: Responses appear as they're generated, no UI freezing
   - 📊 **AI Statistics & Insights**: Ask AI to analyze your water intake patterns
     - Examples: "How am I doing?", "Show my progress", "What are my patterns?"
   - 🤖 **AI Cron Management**: Ask AI to set up/modify/remove cron jobs
@@ -542,6 +544,57 @@ cargo fmt
 
 # Run linter
 cargo clippy -- -D warnings
+```
+
+### Streaming Implementation
+
+GopenPal uses Server-Sent Events (SSE) for real-time LLM response streaming:
+
+**Architecture:**
+
+1. **OpenRouter Client** (`src/openrouter.rs`):
+   - `chat_completion_stream()` method enables streaming via `"stream": true`
+   - Parses SSE lines (format: `data: {...}`)
+   - Sends text chunks via `tokio::sync::mpsc` channel
+
+2. **Chat Session** (`src/chat.rs`):
+   - `send_message_stream()` initiates streaming request
+   - Passes channel to receive chunks asynchronously
+   - Saves user message before streaming begins
+
+3. **TUI** (`src/tui.rs`):
+   - Event loop receives chunks via `try_recv()`
+   - Appends to `current_response` in real-time
+   - Empty chunk signals completion (moves to `chat_messages`)
+   - Auto-scrolls to show streaming text as it arrives
+
+**Benefits:**
+
+- ✅ No UI freezing during API calls
+- ✅ Real-time text display like typical LLM interfaces
+- ✅ Immediate visual feedback during generation
+- ✅ No more cut-off responses
+
+**How Streaming Works:**
+
+```
+User sends message
+    ↓
+ChatSession::send_message_stream() called
+    ↓
+OpenRouterClient::chat_completion_stream() initiates request
+    ↓
+API sends chunks via SSE: data: {"choices":[{"delta":{"content":"Hello"}}]}
+    ↓
+Each chunk sent through mpsc channel
+    ↓
+TUI event loop receives and appends to display
+    ↓
+API sends final marker: data: [DONE]
+    ↓
+Empty string sent to signal completion
+    ↓
+Response moved to chat_messages history
 ```
 
 ### Project Structure

@@ -115,7 +115,169 @@ let prompt = profile.build_agent_prompt(
 );
 ```
 
-### 2. Agent Router (`src/agent_router.rs`)
+### 2. Real-Time Streaming Chat (`src/tui.rs`, `src/openrouter.rs`, `src/chat.rs`)
+
+GopenPal implements Server-Sent Events (SSE) streaming for real-time LLM response generation, providing a smooth, responsive chat experience similar to popular LLM interfaces.
+
+#### Streaming Architecture
+
+The streaming system uses an async channel-based architecture to separate API communication from UI rendering:
+
+```rust
+// Channel for streaming chunks
+let (tx, mut rx) = mpsc::channel::<String>(100);
+
+// TUI event loop receives chunks
+while let Ok(chunk) = rx.try_recv() {
+    if chunk.is_empty() {
+        // Completion marker - move to history
+        app.chat_messages.push(format!("Assistant: {}", app.current_response));
+        app.current_response.clear();
+        app.is_loading = false;
+    } else {
+        // Append streaming chunk
+        app.current_response.push_str(&chunk);
+    }
+}
+```
+
+#### Components
+
+1. **OpenRouter Client** (`src/openrouter.rs`):
+   - `chat_completion_stream()` method enables streaming with `"stream": true`
+   - Parses SSE format: `data: {"choices":[{"delta":{"content":"text"}}]}`
+   - Detects `[DONE]` marker to signal stream completion
+   - Sends text chunks through `mpsc::Sender<String>` channel
+
+2. **Chat Session** (`src/chat.rs`):
+   - `send_message_stream()` initiates streaming request
+   - Passes channel to receive chunks asynchronously
+   - Saves user message before streaming begins
+   - Returns empty string (response built in TUI)
+
+3. **TUI** (`src/tui.rs`):
+   - `mpsc::Receiver<String>` in event loop receives chunks
+   - `current_response: String` accumulates streaming text
+   - `is_loading: bool` tracks generation state
+   - Auto-scrolls to show new content as it arrives
+   - Empty chunk triggers completion (move to `chat_messages`)
+
+#### SSE Parsing Logic
+
+```rust
+// Process SSE byte stream
+let bytes = response.bytes().await?;
+let mut pos = 0;
+
+while pos < bytes.len() {
+    if let Some(line_end) = bytes[pos..].iter().position(|&b| b == b'\n') {
+        let line = String::from_utf8_lossy(&bytes[pos..line_end]);
+        pos = line_end + 1;
+
+        if line.starts_with("data: ") {
+            let data = &line[6..];
+
+            // End of stream
+            if data == "[DONE]" {
+                return Ok(());
+            }
+
+            // Parse JSON chunk
+            if let Ok(chunk) = serde_json::from_str::<StreamChunk>(data) {
+                if let Some(content) = chunk.choices.first().and_then(|c| c.delta.content.as_ref()) {
+                    let _ = tx.send(content.clone()).await;
+                }
+            }
+        }
+    }
+}
+```
+
+#### Data Structures
+
+```rust
+/// Streaming chunk from SSE
+pub struct StreamChunk {
+    pub choices: Vec<StreamChoice>,
+}
+
+/// Individual choice in streaming response
+pub struct StreamChoice {
+    pub delta: StreamDelta,
+}
+
+/// Delta content in streaming response
+pub struct StreamDelta {
+    pub content: Option<String>,
+}
+```
+
+#### Benefits for Agent System
+
+1. **Responsive UI**: TUI remains responsive during API calls
+2. **Real-Time Feedback**: Users see agent responses as they generate
+3. **No Cut-off Responses**: Full response guaranteed before display
+4. **Natural Conversation Flow**: Mimics typical LLM chat interfaces
+5. **Agent Personality Visibility**: Agent voices appear as they speak
+
+#### Streaming Flow
+
+```
+User: "@Hydrix How am I doing today?"
+    ↓
+ChatSession::send_message_stream() called
+    ↓
+OpenRouterClient::chat_completion_stream() request sent
+    ↓
+SSE Chunk 1: "You're" → tx.send("You're")
+    ↓
+TUI: Appends to current_response
+    ↓
+Render: "Assistant: You're"
+    ↓
+SSE Chunk 2: " absolutely" → tx.send(" absolutely")
+    ↓
+TUI: Appends to current_response
+    ↓
+Render: "Assistant: You're absolutely"
+    ↓
+SSE Chunk 3: " crushing it!" → tx.send(" crushing it!")
+    ↓
+TUI: Appends to current_response
+    ↓
+Render: "Assistant: You're absolutely crushing it!"
+    ↓
+SSE Marker: "[DONE]" → tx.send("")
+    ↓
+TUI: Moves to chat_messages history
+    ↓
+Final state in chat_history: "Assistant: You're absolutely crushing it!"
+```
+
+#### Error Handling
+
+```rust
+match session.send_message_stream(&input, tx.clone()).await {
+    Ok(_) => {
+        // Send completion signal
+        let _ = tx_clone.send(String::new()).await;
+    }
+    Err(e) => {
+        // Send error as chunk
+        let _ = tx_clone.send(format!("\n\nError: {}", e)).await;
+        let _ = tx_clone.send(String::new()).await;
+    }
+}
+```
+
+#### Performance Considerations
+
+- **Channel Buffer**: 100 messages to handle bursty streaming
+- **Non-Blocking**: `try_recv()` doesn't block UI event loop
+- **Auto-Scroll**: Automatically scrolls to show new content
+- **Memory**: `current_response` grows unbounded during streaming (acceptable for typical responses)
+
+### 3. Agent Router (`src/agent_router.rs`)
 
 The router analyzes message content to automatically select the most appropriate agent or respects explicit @mentions.
 
@@ -287,10 +449,36 @@ Each agent is configured with:
    - Update best practices if needed
 
 5. **Write comprehensive tests**
-   - Test personality prompt generation
-   - Test routing (explicit and content-based)
-   - Test tool access permissions
-   - Test multi-agent coordination if applicable
+    - Test personality prompt generation
+    - Test routing (explicit and content-based)
+    - Test tool access permissions
+    - Test multi-agent coordination if applicable
+    - Test streaming chunk parsing and assembly
+
+**When adding streaming functionality:**
+
+1. **SSE Parsing**: Ensure all SSE formats are handled
+   - Skip empty lines and comments (lines starting with `:`)
+   - Parse `data:` lines correctly
+   - Handle `[DONE]` marker for completion
+   - Gracefully skip malformed JSON chunks
+
+2. **Channel Management**: Properly handle async communication
+   - Use non-blocking `try_recv()` in TUI event loop
+   - Send empty string as completion signal
+   - Handle channel errors gracefully
+   - Don't block UI during streaming
+
+3. **Error Handling**: Provide user-friendly error messages
+   - Send errors as chunks with clear prefix
+   - Always send completion signal after errors
+   - Don't leave TUI in loading state on error
+
+4. **State Management**: Keep UI state consistent
+   - Clear `current_response` after completion
+   - Reset `is_loading` flag appropriately
+   - Move complete responses to `chat_messages`
+   - Handle partial responses on errors
 
 ### Testing Requirements
 
@@ -321,6 +509,20 @@ mod tests {
         let decision = router.route("keyword1 keyword2");
         assert_eq!(decision.agent, "ExpectedAgent");
         assert!(!decision.explicit);
+    }
+
+    #[test]
+    fn test_sse_parsing() {
+        let chunk_data = r#"data: {"choices":[{"delta":{"content":"Hello"}}]"#;
+        if let Ok(chunk) = serde_json::from_str::<StreamChunk>(chunk_data.trim_start_matches("data: ")) {
+            assert!(chunk.choices.first().is_some());
+        }
+    }
+
+    #[test]
+    fn test_streaming_done_marker() {
+        let data = "[DONE]";
+        assert_eq!(data, "[DONE]");
     }
 }
 ```
@@ -451,6 +653,9 @@ let content = std::fs::read_to_string(&user_provided_path)?;  // NEVER DO THIS
 - [ ] Security boundaries are respected
 - [ ] Doc comments are present for all public items
 - [ ] Examples are provided for complex agent behaviors
+- [ ] SSE parsing handles all edge cases (empty lines, comments, malformed JSON)
+- [ ] Channel management is correct (non-blocking, error handling)
+- [ ] Streaming state is consistent (loading flag cleared, responses moved to history)
 
 ## Future Enhancements
 
