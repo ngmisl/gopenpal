@@ -80,10 +80,13 @@ This document tracks planned features, improvements, and technical tasks for Gop
 
 ### AI Chat Improvements
 
-- [ ] **Context-Aware Agent Selection**
-  - Auto-route messages to appropriate agent based on content
-  - Default to Mio for coordination and route to specialists
-  - Add explicit agent selection in CLI/TUI (e.g., `@Hydrix how am I doing?`)
+- [x] **Context-Aware Agent Selection** (2026-01-04)
+  - Created comprehensive agent routing system with keyword-based content analysis
+  - Explicit agent mentions: @Hydrix, @Mio, @Serhant, @Karen
+  - Automatic routing based on message content (water→Hydrix, sales→Serhant, tasks→Karen)
+  - Confidence-based routing with fallback to Mio for coordination
+  - Visual routing indicator shows which agent is handling the request
+  - 7 comprehensive tests covering explicit mentions and content-based routing
 
 - [ ] **Multi-Agent Conversations**
   - Allow multiple agents to participate in single conversation

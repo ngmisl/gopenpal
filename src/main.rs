@@ -3,6 +3,7 @@
 //! A CLI application for managing water intake, work habits, and AI-powered assistance.
 
 mod agent_daemon;
+mod agent_router;
 mod agents;
 mod chat;
 mod cli;

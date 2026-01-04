@@ -14,6 +14,7 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use tracing::info;
 
+use crate::agent_router::AgentRouter;
 use crate::agents::AgentSystem;
 use crate::cron::CronManager;
 use crate::db::Database;
@@ -218,6 +219,7 @@ pub struct ChatSession {
     db: Database,
     client: OpenRouterClient,
     model: String,
+    router: AgentRouter,
 }
 
 impl ChatSession {
@@ -229,7 +231,12 @@ impl ChatSession {
     /// * `client` - OpenRouter API client
     /// * `model` - Model identifier to use (e.g., "anthropic/claude-3.5-sonnet")
     pub fn new(db: Database, client: OpenRouterClient, model: String) -> Self {
-        Self { db, client, model }
+        Self {
+            db,
+            client,
+            model,
+            router: AgentRouter::new(),
+        }
     }
 
     /// Start an interactive chat session.
@@ -245,7 +252,12 @@ impl ChatSession {
         println!("Model: {}", self.model);
         println!("Type 'exit' or 'quit' to end the session");
         println!("Type 'clear' to clear chat history");
-        println!("Type 'history' to view recent messages\n");
+        println!("Type 'history' to view recent messages");
+        println!("\nAgent Routing:");
+        println!("  @Hydrix - Talk to the Hydration Guardian (water/health)");
+        println!("  @Serhant - Get Big Money Energy coaching (work/sales/motivation)");
+        println!("  @Karen - Executive assistant (tasks/reminders/organization)");
+        println!("  @Mio - Coordination and general support (default)\n");
 
         // Load recent history for context (last 10 messages)
         let history = self.db.get_recent_chat_history(10).await?;
@@ -297,6 +309,49 @@ impl ChatSession {
                 _ => {}
             }
 
+            // Route the message to the appropriate agent
+            let routing = self.router.route(input);
+
+            // Use the cleaned message if an agent was explicitly mentioned
+            let message_to_process = if routing.explicit {
+                &routing.cleaned_message
+            } else {
+                input
+            };
+
+            // If high confidence routing to a specialist or explicit mention, delegate directly
+            if routing.explicit || (routing.confidence > 0.7 && routing.agent != "Mio") {
+                print_colored(&format!("[Routing to {}] ", routing.agent), Color::Yellow)?;
+                println!();
+
+                // Save user message to database
+                self.db
+                    .save_chat_message("user", input, None, None)
+                    .await?;
+
+                // Delegate to the specialist agent
+                print_colored("Assistant: ", Color::Cyan)?;
+                io::stdout().flush()?;
+
+                let agent_response = delegate_to_agent(
+                    &routing.agent,
+                    message_to_process,
+                    &self.db,
+                    &self.client,
+                    &self.model
+                ).await;
+
+                println!("{}\n", agent_response);
+
+                // Save agent response to database
+                self.db
+                    .save_chat_message(&routing.agent, &agent_response, Some(&self.model), None)
+                    .await?;
+
+                continue;
+            }
+
+            // Otherwise, proceed with normal chat (Mio coordination)
             // Add user message
             let user_message = Message::user(input);
             messages.push(user_message.clone());
