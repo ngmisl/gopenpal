@@ -721,6 +721,32 @@ async fn process_stats_commands(content: &str, db: &Database) -> (String, Option
         }
     }
 
+    // Check for GOAL:STATUS command
+    if content.contains("[GOAL:STATUS]") {
+        let result = match db.get_today_goal_progress().await {
+            Ok((current, target, percentage, achieved)) => {
+                if target > 0 {
+                    let mut output = "=== Daily Water Goal Progress ===\n\n".to_string();
+                    output.push_str(&format!("Target: {} ml ({:.1} L)\n", target, target as f64 / 1000.0));
+                    output.push_str(&format!("Current: {} ml ({:.1} L)\n", current, current as f64 / 1000.0));
+                    output.push_str(&format!("Progress: {:.1}%\n", percentage));
+                    if achieved {
+                        output.push_str("Status: Goal achieved!\n");
+                    } else {
+                        let remaining = target - current;
+                        output.push_str(&format!("Remaining: {} ml ({:.1} L)\n", remaining, remaining as f64 / 1000.0));
+                    }
+                    output
+                } else {
+                    "No active daily water goal set.".to_string()
+                }
+            }
+            Err(e) => format!("Error fetching goal progress: {}", e),
+        };
+        result_message = Some(result);
+        cleaned = cleaned.replace("[GOAL:STATUS]", "");
+    }
+
     // Clean up any extra whitespace
     cleaned = cleaned.trim().to_string();
 

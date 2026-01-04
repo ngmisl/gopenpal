@@ -51,6 +51,12 @@ pub enum Commands {
         action: AgentCommands,
     },
 
+    /// Manage goals and track progress
+    Goal {
+        #[command(subcommand)]
+        action: GoalCommands,
+    },
+
     /// Initialize database and configuration
     Init,
 }
@@ -200,5 +206,28 @@ pub enum AgentCommands {
         /// Show only unlocked achievements
         #[arg(short, long)]
         unlocked: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum GoalCommands {
+    /// Set daily water goal
+    Set {
+        /// Target amount in milliliters
+        amount: i64,
+
+        /// Optional notes
+        #[arg(short, long)]
+        notes: Option<String>,
+    },
+
+    /// Show current goal and progress
+    Status,
+
+    /// Show goal progress history
+    History {
+        /// Number of days to show
+        #[arg(short, long, default_value = "7")]
+        days: i64,
     },
 }

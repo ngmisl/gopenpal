@@ -81,6 +81,11 @@ impl Database {
             .execute(&self.pool)
             .await?;
 
+        let goals_sql = include_str!("../migrations/20260104_goals_tracking.sql");
+        sqlx::query(goals_sql)
+            .execute(&self.pool)
+            .await?;
+
         Ok(())
     }
 
@@ -801,6 +806,193 @@ impl Database {
 
         Ok(summary)
     }
+
+    /// Set or update the daily water goal.
+    ///
+    /// # Arguments
+    ///
+    /// * `target_ml` - Target water intake in milliliters
+    /// * `notes` - Optional notes about the goal
+    ///
+    /// # Returns
+    ///
+    /// The ID of the created or updated goal
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Database` if operation fails
+    pub async fn set_daily_water_goal(&self, target_ml: i64, notes: Option<&str>) -> Result<i64> {
+        // Deactivate any existing active daily_water goals
+        sqlx::query(
+            r#"
+            UPDATE goals
+            SET active = 0, updated_at = datetime('now')
+            WHERE goal_type = 'daily_water' AND active = 1
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        // Insert new goal
+        let result = sqlx::query(
+            r#"
+            INSERT INTO goals (goal_type, target_value, unit, notes)
+            VALUES ('daily_water', ?, 'ml', ?)
+            "#,
+        )
+        .bind(target_ml as f64)
+        .bind(notes)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.last_insert_rowid())
+    }
+
+    /// Get the current active daily water goal.
+    ///
+    /// # Returns
+    ///
+    /// Optional `Goal` if one exists
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Database` if query fails
+    pub async fn get_active_daily_water_goal(&self) -> Result<Option<Goal>> {
+        let goal = sqlx::query_as::<_, Goal>(
+            r#"
+            SELECT id, goal_type, target_value, unit, created_at, updated_at, active, notes
+            FROM goals
+            WHERE goal_type = 'daily_water' AND active = 1
+            ORDER BY created_at DESC
+            LIMIT 1
+            "#,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(goal)
+    }
+
+    /// Get today's progress toward the daily water goal.
+    ///
+    /// # Returns
+    ///
+    /// Tuple of (today_total_ml, goal_target_ml, percentage, achieved)
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Database` if query fails
+    pub async fn get_today_goal_progress(&self) -> Result<(i64, i64, f64, bool)> {
+        let today_total = self.get_today_total_ml().await?;
+
+        let goal = self.get_active_daily_water_goal().await?;
+
+        let (target, percentage, achieved) = if let Some(g) = goal {
+            let target = g.target_value as i64;
+            let pct = if target > 0 {
+                (today_total as f64 / target as f64) * 100.0
+            } else {
+                0.0
+            };
+            let achieved = today_total >= target;
+            (target, pct, achieved)
+        } else {
+            (0, 0.0, false)
+        };
+
+        Ok((today_total, target, percentage, achieved))
+    }
+
+    /// Record daily goal progress (called at end of day or on-demand).
+    ///
+    /// # Arguments
+    ///
+    /// * `date` - Date to record progress for (YYYY-MM-DD)
+    ///
+    /// # Returns
+    ///
+    /// The ID of the created progress record
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Database` if operation fails
+    pub async fn record_daily_goal_progress(&self, date: &str) -> Result<i64> {
+        let goal = self.get_active_daily_water_goal().await?;
+
+        if let Some(g) = goal {
+            // Get total for the specified date
+            let total: i64 = sqlx::query_scalar(
+                r#"
+                SELECT COALESCE(SUM(amount_ml), 0)
+                FROM water_intake
+                WHERE DATE(timestamp) = ?
+                "#,
+            )
+            .bind(date)
+            .fetch_one(&self.pool)
+            .await?;
+
+            let target = g.target_value as i64;
+            let percentage = if target > 0 {
+                (total as f64 / target as f64) * 100.0
+            } else {
+                0.0
+            };
+            let achieved = total >= target;
+
+            let result = sqlx::query(
+                r#"
+                INSERT INTO goal_progress (goal_id, date, actual_value, target_value, achieved, percentage)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(goal_id, date) DO UPDATE SET
+                    actual_value = excluded.actual_value,
+                    achieved = excluded.achieved,
+                    percentage = excluded.percentage
+                "#,
+            )
+            .bind(g.id)
+            .bind(date)
+            .bind(total as f64)
+            .bind(g.target_value)
+            .bind(if achieved { 1 } else { 0 })
+            .bind(percentage)
+            .execute(&self.pool)
+            .await?;
+
+            Ok(result.last_insert_rowid())
+        } else {
+            Ok(0)
+        }
+    }
+
+    /// Get goal progress history for the last N days.
+    ///
+    /// # Arguments
+    ///
+    /// * `days` - Number of days to retrieve
+    ///
+    /// # Returns
+    ///
+    /// Vector of `GoalProgress` records
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Database` if query fails
+    pub async fn get_goal_progress_history(&self, days: i64) -> Result<Vec<GoalProgress>> {
+        let progress = sqlx::query_as::<_, GoalProgress>(
+            r#"
+            SELECT id, goal_id, date, actual_value, target_value, achieved, percentage, created_at
+            FROM goal_progress
+            WHERE date >= DATE('now', ? || ' days')
+            ORDER BY date DESC
+            "#,
+        )
+        .bind(format!("-{}", days))
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(progress)
+    }
 }
 
 /// Water intake record.
@@ -884,6 +1076,32 @@ pub struct ReminderEffectiveness {
     pub avg_response_seconds: Option<f64>,
 }
 
+/// Goal record.
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Goal {
+    pub id: i64,
+    pub goal_type: String,
+    pub target_value: f64,
+    pub unit: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub active: i64,
+    pub notes: Option<String>,
+}
+
+/// Goal progress record.
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct GoalProgress {
+    pub id: i64,
+    pub goal_id: i64,
+    pub date: String,
+    pub actual_value: f64,
+    pub target_value: f64,
+    pub achieved: i64,
+    pub percentage: f64,
+    pub created_at: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -937,5 +1155,92 @@ mod tests {
         assert_eq!(history.len(), 2);
         assert_eq!(history[0].role, "user");
         assert_eq!(history[1].role, "assistant");
+    }
+
+    #[tokio::test]
+    async fn test_set_daily_water_goal() {
+        let db = Database::new("sqlite::memory:").await.unwrap();
+        db.migrate().await.unwrap();
+
+        // Set a goal
+        let goal_id = db.set_daily_water_goal(2000, Some("Test goal")).await.unwrap();
+        assert!(goal_id > 0);
+
+        // Get the active goal
+        let goal = db.get_active_daily_water_goal().await.unwrap();
+        assert!(goal.is_some());
+        let g = goal.unwrap();
+        assert_eq!(g.target_value as i64, 2000);
+        assert_eq!(g.notes, Some("Test goal".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_get_today_goal_progress() {
+        let db = Database::new("sqlite::memory:").await.unwrap();
+        db.migrate().await.unwrap();
+
+        // Set a goal
+        db.set_daily_water_goal(2000, None).await.unwrap();
+
+        // Log some water
+        db.record_water_intake(500, None).await.unwrap();
+        db.record_water_intake(750, None).await.unwrap();
+
+        // Check progress
+        let (current, target, percentage, achieved) = db.get_today_goal_progress().await.unwrap();
+        assert_eq!(current, 1250);
+        assert_eq!(target, 2000);
+        assert!((percentage - 62.5).abs() < 0.1);
+        assert!(!achieved);
+
+        // Log more water to achieve goal
+        db.record_water_intake(800, None).await.unwrap();
+
+        let (current2, _target2, percentage2, achieved2) = db.get_today_goal_progress().await.unwrap();
+        assert_eq!(current2, 2050);
+        assert!((percentage2 - 102.5).abs() < 0.1);
+        assert!(achieved2);
+    }
+
+    #[tokio::test]
+    async fn test_record_daily_goal_progress() {
+        let db = Database::new("sqlite::memory:").await.unwrap();
+        db.migrate().await.unwrap();
+
+        // Set a goal
+        db.set_daily_water_goal(2000, None).await.unwrap();
+
+        // Log water
+        db.record_water_intake(1800, None).await.unwrap();
+
+        // Record progress for today
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let progress_id = db.record_daily_goal_progress(&today).await.unwrap();
+        assert!(progress_id > 0);
+
+        // Get progress history
+        let history = db.get_goal_progress_history(7).await.unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].actual_value as i64, 1800);
+        assert_eq!(history[0].target_value as i64, 2000);
+        assert_eq!(history[0].achieved, 0);
+    }
+
+    #[tokio::test]
+    async fn test_goal_progress_default_goal() {
+        let db = Database::new("sqlite::memory:").await.unwrap();
+        db.migrate().await.unwrap();
+
+        // Migration creates a default goal of 2000ml
+        let goal = db.get_active_daily_water_goal().await.unwrap();
+        assert!(goal.is_some());
+        assert_eq!(goal.unwrap().target_value as i64, 2000);
+
+        // Check progress with default goal and no water logged
+        let (current, target, percentage, achieved) = db.get_today_goal_progress().await.unwrap();
+        assert_eq!(current, 0);
+        assert_eq!(target, 2000);
+        assert_eq!(percentage, 0.0);
+        assert!(!achieved);
     }
 }

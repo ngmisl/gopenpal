@@ -26,7 +26,7 @@ use tracing_subscriber::EnvFilter;
 use agent_daemon::{AgentDaemon, AgentDaemonConfig};
 use agents::AgentSystem;
 use chat::ChatSession;
-use cli::{AgentCommands, ChatCommands, Cli, Commands, ReminderCommands, WaterCommands};
+use cli::{AgentCommands, ChatCommands, Cli, Commands, GoalCommands, ReminderCommands, WaterCommands};
 use db::Database;
 use openrouter::OpenRouterClient;
 use reminder::ReminderService;
@@ -119,6 +119,11 @@ async fn run() -> anyhow::Result<()> {
             db.migrate().await?;
             handle_agent_command(&db, action).await?;
         }
+
+        Commands::Goal { action } => {
+            db.migrate().await?;
+            handle_goal_command(&db, action).await?;
+        }
     }
 
     Ok(())
@@ -137,6 +142,20 @@ async fn handle_water_command(db: &Database, action: WaterCommands) -> anyhow::R
                 total,
                 total as f64 / 1000.0
             );
+
+            // Show goal progress if goal exists
+            let (current, target, percentage, achieved) = db.get_today_goal_progress().await?;
+            if target > 0 {
+                println!("\nGoal Progress:");
+                println!("  Target: {} ml", target);
+                println!("  Progress: {:.1}%", percentage);
+                if achieved {
+                    println!("  Goal achieved! Excellent work!");
+                } else {
+                    let remaining = target - current;
+                    println!("  Remaining: {} ml", remaining);
+                }
+            }
         }
 
         WaterCommands::Today => {
@@ -502,6 +521,105 @@ async fn handle_agent_command(db: &Database, action: AgentCommands) -> anyhow::R
                 }
                 println!();
             }
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle goal management commands.
+async fn handle_goal_command(db: &Database, action: GoalCommands) -> anyhow::Result<()> {
+    match action {
+        GoalCommands::Set { amount, notes } => {
+            db.set_daily_water_goal(amount, notes.as_deref()).await?;
+            println!("Daily water goal set to {} ml ({:.1} L)", amount, amount as f64 / 1000.0);
+
+            // Show current progress
+            let (current, target, percentage, achieved) = db.get_today_goal_progress().await?;
+            println!("\nToday's progress:");
+            println!("  Current: {} ml", current);
+            println!("  Target: {} ml", target);
+            println!("  Progress: {:.1}%", percentage);
+            if achieved {
+                println!("  Status: Goal achieved! Excellent work!");
+            } else {
+                let remaining = target - current;
+                println!("  Remaining: {} ml", remaining);
+            }
+        }
+
+        GoalCommands::Status => {
+            let goal = db.get_active_daily_water_goal().await?;
+
+            if let Some(g) = goal {
+                println!("Current Daily Water Goal:");
+                println!("  Target: {} ml ({:.1} L)", g.target_value as i64, g.target_value / 1000.0);
+                if let Some(notes) = &g.notes {
+                    println!("  Notes: {}", notes);
+                }
+                println!("  Set on: {}", g.created_at);
+
+                println!("\nToday's Progress:");
+                let (current, target, percentage, achieved) = db.get_today_goal_progress().await?;
+                println!("  Current: {} ml ({:.1} L)", current, current as f64 / 1000.0);
+                println!("  Progress: {:.1}%", percentage);
+
+                // Visual progress bar
+                let bar_width = 50;
+                let filled = ((percentage / 100.0 * bar_width as f64) as usize).min(bar_width);
+                let empty = bar_width - filled;
+                println!("  [{}{}]", "=".repeat(filled), " ".repeat(empty));
+
+                if achieved {
+                    println!("  Status: Goal achieved! Keep up the great work!");
+                } else {
+                    let remaining = target - current;
+                    println!("  Remaining: {} ml ({:.1} L)", remaining, remaining as f64 / 1000.0);
+                }
+            } else {
+                println!("No active daily water goal set.");
+                println!("Set one with: gopenpal goal set 2000");
+            }
+        }
+
+        GoalCommands::History { days } => {
+            // Record today's progress before showing history
+            let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+            let _ = db.record_daily_goal_progress(&today).await;
+
+            let progress = db.get_goal_progress_history(days).await?;
+
+            if progress.is_empty() {
+                println!("No goal progress history found for the last {} days.", days);
+                return Ok(());
+            }
+
+            println!("Goal Progress History (last {} days):\n", days);
+            println!("{:<12} {:<10} {:<10} {:<10} {:<8}", "Date", "Actual", "Target", "Progress", "Status");
+            println!("{}", "-".repeat(60));
+
+            for p in &progress {
+                let status = if p.achieved > 0 { "Achieved" } else { "Missed" };
+                println!(
+                    "{:<12} {:<10} {:<10} {:<9.1}% {:<8}",
+                    p.date,
+                    format!("{} ml", p.actual_value as i64),
+                    format!("{} ml", p.target_value as i64),
+                    p.percentage,
+                    status
+                );
+            }
+
+            // Calculate achievement rate
+            let total = progress.len();
+            let achieved = progress.iter().filter(|p| p.achieved > 0).count();
+            let rate = if total > 0 {
+                (achieved as f64 / total as f64) * 100.0
+            } else {
+                0.0
+            };
+
+            println!("\nAchievement Rate: {}/{} ({:.1}%)", achieved, total, rate);
         }
     }
 

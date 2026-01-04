@@ -215,6 +215,29 @@
       ]
     },
     {
+      "name": "GOAL_TOOL",
+      "category": "analytics",
+      "description": "Check daily water goal progress and achievement status",
+      "access": ["Mio", "Hydrix", "Serhant"],
+      "priority": "primary",
+      "usage_notes": "Use to show goal progress and motivate users toward targets",
+      "commands": [
+        {
+          "syntax": "[GOAL:STATUS]",
+          "description": "Get current daily water goal progress",
+          "parameters": {},
+          "examples": ["[GOAL:STATUS]"],
+          "output": "Shows target, current intake, progress percentage, and remaining amount"
+        }
+      ],
+      "best_practices": [
+        "Check goal progress when discussing hydration",
+        "Celebrate when user achieves goal",
+        "Provide encouragement when user is behind",
+        "Combine with STATS for deeper insights"
+      ]
+    },
+    {
       "name": "AGENT_DELEGATE_TOOL",
       "category": "coordination",
       "description": "Delegate tasks to specialized agents (Mio only)",
