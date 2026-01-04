@@ -235,17 +235,6 @@ impl AgentRouter {
             .filter(|keyword| message.contains(keyword.as_str()))
             .count()
     }
-
-    /// Add custom keywords for an agent.
-    pub fn add_keywords(&mut self, agent: &str, keywords: Vec<String>) {
-        match agent {
-            "Hydrix" => self.agent_keywords.hydrix.extend(keywords),
-            "Serhant" => self.agent_keywords.serhant.extend(keywords),
-            "Karen" => self.agent_keywords.karen.extend(keywords),
-            "Mio" => self.agent_keywords.mio.extend(keywords),
-            _ => {}
-        }
-    }
 }
 
 #[cfg(test)]
@@ -308,14 +297,5 @@ mod tests {
 
         assert_eq!(decision.agent, "Mio");
         assert!(!decision.explicit);
-    }
-
-    #[test]
-    fn test_add_custom_keywords() {
-        let mut router = AgentRouter::new();
-        router.add_keywords("Hydrix", vec!["h2o".to_string()]);
-
-        let decision = router.route("I need more h2o");
-        assert_eq!(decision.agent, "Hydrix");
     }
 }

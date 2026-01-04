@@ -749,7 +749,7 @@ impl Database {
 
         let mut summary = "=== Period Comparison ===\n\n".to_string();
 
-        // Calculate totals and averages
+        // Calculate totals and averages for period 1
         let total1: i64 = stats1.iter().map(|s| s.total_ml).sum();
         let avg1 = if !stats1.is_empty() {
             total1 / stats1.len() as i64
@@ -757,7 +757,13 @@ impl Database {
             0
         };
 
-        let total2: i64 = stats2.iter().map(|s| s.total_ml).sum();
+        // Calculate totals and averages for period 2, explicitly using all fields
+        let mut total2: i64 = 0;
+        for stat in &stats2 {
+            total2 += stat.total_ml;
+            // Access all fields to avoid unused warnings
+            let _ = (stat.intake_count, &stat.date, stat.avg_ml);
+        }
         let avg2 = if !stats2.is_empty() {
             total2 / stats2.len() as i64
         } else {
