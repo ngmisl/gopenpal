@@ -97,10 +97,17 @@ This document tracks planned features, improvements, and technical tasks for Gop
   - Examples in system prompt teach Mio when to use multi-agent coordination
   - Blue [MULTI-AGENT COLLABORATION] indicator for coordinated responses
 
-- [ ] **Enhanced Tool Integration**
-  - Add more STATS_TOOL commands (monthly, yearly, comparisons)
-  - Implement CRON_TOOL preset suggestions based on user patterns
-  - Add undo/rollback for tool actions
+- [x] **Enhanced Tool Integration - STATS_TOOL** (2026-01-04)
+  - Added STATS:MONTHLY:{months} command for monthly statistics
+  - Added STATS:COMPARE:{period1}|{start}|{end} for period comparisons
+  - Monthly stats show: total intake, days logged, avg per day, trends
+  - Comparison stats show: percentage changes, visual indicators (📈📉📊)
+  - Integrated into command processing pipeline
+  - Updated fallback system prompt with new command documentation
+
+- [ ] **Enhanced Tool Integration - Additional Features**
+  - Implement CRON_TOOL preset suggestions based on user patterns (pending)
+  - Add undo/rollback for tool actions (pending)
 
 ### Statistics & Analytics
 

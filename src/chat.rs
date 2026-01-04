@@ -192,6 +192,8 @@ fn build_fallback_prompt() -> String {
          - [STATS:SUMMARY:30] - Get 30-day summary\n\
          - [STATS:HOURLY] - Get hourly drinking patterns\n\
          - [STATS:WEEKLY] - Get weekly patterns\n\
+         - [STATS:MONTHLY:6] - Get monthly statistics (last N months)\n\
+         - [STATS:COMPARE:7|-14|-7] - Compare periods (this week vs last week)\n\
          - [STATS:EFFECTIVENESS] - Get reminder effectiveness stats\n\n\
          Use STATS_TOOL when users ask:\n\
          - \"How am I doing?\" / \"Show my progress\"\n\
@@ -672,6 +674,51 @@ async fn process_stats_commands(content: &str, db: &Database) -> (String, Option
         };
         result_message = Some(result);
         cleaned = cleaned.replace("[STATS:EFFECTIVENESS]", "");
+    }
+
+    // Check for STATS:MONTHLY command
+    if let Some(start) = content.find("[STATS:MONTHLY:") {
+        if let Some(end) = content[start..].find(']') {
+            let command = &content[start..start + end + 1];
+            let months_str = command
+                .trim_start_matches("[STATS:MONTHLY:")
+                .trim_end_matches(']');
+
+            if let Ok(months) = months_str.parse::<i64>() {
+                let result = match db.get_monthly_statistics(months).await {
+                    Ok(stats) => stats,
+                    Err(e) => format!("Error fetching monthly statistics: {}", e),
+                };
+                result_message = Some(result);
+                cleaned = cleaned.replace(command, "");
+            }
+        }
+    }
+
+    // Check for STATS:COMPARE command (format: [STATS:COMPARE:7|-14|-7] compares this week to last week)
+    if let Some(start) = content.find("[STATS:COMPARE:") {
+        if let Some(end) = content[start..].find(']') {
+            let command = &content[start..start + end + 1];
+            let params = command
+                .trim_start_matches("[STATS:COMPARE:")
+                .trim_end_matches(']');
+
+            let parts: Vec<&str> = params.split('|').collect();
+            if parts.len() == 3 {
+                if let (Ok(p1), Ok(p2_start), Ok(p2_end)) = (
+                    parts[0].parse::<i64>(),
+                    parts[1].parse::<i64>(),
+                    parts[2].parse::<i64>(),
+                ) {
+                    let result = match db.compare_periods(p1, p2_start, p2_end).await {
+                        Ok(comparison) => comparison,
+                        Err(e) => format!("Error comparing periods: {}", e),
+                    };
+                    result_message = Some(result);
+                    cleaned = cleaned.replace(command, "");
+                }
+            }
+        }
     }
 
     // Clean up any extra whitespace

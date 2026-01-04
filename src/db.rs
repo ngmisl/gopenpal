@@ -604,6 +604,197 @@ impl Database {
 
         Ok(summary)
     }
+
+    /// Get monthly statistics for water intake.
+    ///
+    /// # Arguments
+    ///
+    /// * `months` - Number of months to analyze (default 6)
+    ///
+    /// # Returns
+    ///
+    /// Formatted string with monthly statistics
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Database` if queries fail
+    pub async fn get_monthly_statistics(&self, months: i64) -> Result<String> {
+        let query = r#"
+            SELECT
+                strftime('%Y-%m', timestamp) as month,
+                COUNT(*) as intake_count,
+                SUM(amount_ml) as total_ml,
+                AVG(amount_ml) as avg_ml,
+                COUNT(DISTINCT DATE(timestamp)) as days_logged
+            FROM water_intake
+            WHERE timestamp >= datetime('now', '-' || ? || ' months')
+            GROUP BY month
+            ORDER BY month DESC
+        "#;
+
+        #[derive(sqlx::FromRow)]
+        struct MonthlyStats {
+            month: String,
+            intake_count: i64,
+            total_ml: i64,
+            avg_ml: i64,
+            days_logged: i64,
+        }
+
+        let stats: Vec<MonthlyStats> = sqlx::query_as(query)
+            .bind(months)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let mut summary = format!("=== Monthly Water Intake Statistics (Last {} months) ===\n\n", months);
+
+        if stats.is_empty() {
+            summary.push_str("No water intake data available for this period.\n");
+            return Ok(summary);
+        }
+
+        for stat in &stats {
+            let avg_per_day = if stat.days_logged > 0 {
+                stat.total_ml / stat.days_logged
+            } else {
+                0
+            };
+
+            summary.push_str(&format!(
+                "{}: Total: {}ml | Days logged: {} | Avg per day: {}ml | {} intakes (avg: {}ml)\n",
+                stat.month,
+                stat.total_ml,
+                stat.days_logged,
+                avg_per_day,
+                stat.intake_count,
+                stat.avg_ml
+            ));
+        }
+
+        // Add trend analysis
+        if stats.len() >= 2 {
+            let recent = &stats[0];
+            let previous = &stats[1];
+
+            let recent_avg = if recent.days_logged > 0 {
+                recent.total_ml / recent.days_logged
+            } else {
+                0
+            };
+
+            let prev_avg = if previous.days_logged > 0 {
+                previous.total_ml / previous.days_logged
+            } else {
+                0
+            };
+
+            if prev_avg > 0 {
+                let change_pct = ((recent_avg - prev_avg) as f64 / prev_avg as f64) * 100.0;
+                summary.push_str(&format!(
+                    "\nTrend: {:+.1}% vs previous month\n",
+                    change_pct
+                ));
+            }
+        }
+
+        Ok(summary)
+    }
+
+    /// Compare statistics between two time periods.
+    ///
+    /// # Arguments
+    ///
+    /// * `period1_days` - Number of days for first period
+    /// * `period2_start` - Start offset for second period (negative)
+    /// * `period2_end` - End offset for second period (negative)
+    ///
+    /// # Returns
+    ///
+    /// Formatted comparison string
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Database` if queries fail
+    pub async fn compare_periods(&self, period1_days: i64, period2_start: i64, period2_end: i64) -> Result<String> {
+        // Period 1 (most recent)
+        let stats1 = self.get_daily_water_stats(period1_days).await?;
+
+        // Period 2 (comparison period)
+        let query = r#"
+            SELECT
+                DATE(timestamp) as date,
+                COUNT(*) as intake_count,
+                SUM(amount_ml) as total_ml,
+                AVG(amount_ml) as avg_ml
+            FROM water_intake
+            WHERE timestamp >= datetime('now', ? || ' days')
+              AND timestamp < datetime('now', ? || ' days')
+            GROUP BY date
+            ORDER BY date DESC
+        "#;
+
+        #[derive(sqlx::FromRow)]
+        struct DailyStats {
+            date: String,
+            intake_count: i64,
+            total_ml: i64,
+            avg_ml: i64,
+        }
+
+        let stats2: Vec<DailyStats> = sqlx::query_as(query)
+            .bind(format!("{}", period2_start))
+            .bind(format!("{}", period2_end))
+            .fetch_all(&self.pool)
+            .await?;
+
+        let mut summary = "=== Period Comparison ===\n\n".to_string();
+
+        // Calculate totals and averages
+        let total1: i64 = stats1.iter().map(|s| s.total_ml).sum();
+        let avg1 = if !stats1.is_empty() {
+            total1 / stats1.len() as i64
+        } else {
+            0
+        };
+
+        let total2: i64 = stats2.iter().map(|s| s.total_ml).sum();
+        let avg2 = if !stats2.is_empty() {
+            total2 / stats2.len() as i64
+        } else {
+            0
+        };
+
+        summary.push_str(&format!(
+            "Period 1 (last {} days):\n  Total: {}ml | Avg per day: {}ml | Days: {}\n\n",
+            period1_days, total1, avg1, stats1.len()
+        ));
+
+        summary.push_str(&format!(
+            "Period 2 (comparison):\n  Total: {}ml | Avg per day: {}ml | Days: {}\n\n",
+            total2, avg2, stats2.len()
+        ));
+
+        // Calculate differences
+        if avg2 > 0 {
+            let change_pct = ((avg1 - avg2) as f64 / avg2 as f64) * 100.0;
+            let change_ml = avg1 - avg2;
+
+            summary.push_str(&format!(
+                "Change: {:+}ml per day ({:+.1}%)\n",
+                change_ml, change_pct
+            ));
+
+            if change_pct > 10.0 {
+                summary.push_str("📈 Significant improvement!\n");
+            } else if change_pct < -10.0 {
+                summary.push_str("📉 Notable decrease\n");
+            } else {
+                summary.push_str("📊 Relatively stable\n");
+            }
+        }
+
+        Ok(summary)
+    }
 }
 
 /// Water intake record.
