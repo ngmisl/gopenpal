@@ -328,9 +328,14 @@ fn render_dashboard(f: &mut Frame, area: Rect, db: &Database) {
     .block(Block::default().borders(Borders::ALL));
     f.render_widget(welcome, chunks[0]);
 
-    // Water intake stats
-    let handle = tokio::runtime::Handle::current();
-    let total_ml = handle.block_on(async { db.get_today_total_ml().await.unwrap_or(0) });
+    // Water intake stats - safely handle runtime access
+    let total_ml = tokio::runtime::Handle::try_current()
+        .ok()
+        .and_then(|handle| {
+            // Use block_on only if we have a handle
+            Some(handle.block_on(async { db.get_today_total_ml().await.unwrap_or(0) }))
+        })
+        .unwrap_or(0); // Default to 0 if no runtime available
 
     let daily_goal = 2000; // 2 liters
     let progress = (total_ml as f64 / daily_goal as f64).min(1.0);
@@ -399,9 +404,13 @@ fn render_water_tracking(f: &mut Frame, area: Rect, app: &App, db: &Database) {
         );
     f.render_widget(input, chunks[0]);
 
-    // Recent entries
-    let handle = tokio::runtime::Handle::current();
-    let entries = handle.block_on(async { db.get_today_water_intake().await.unwrap_or_default() });
+    // Recent entries - safely handle runtime access
+    let entries = tokio::runtime::Handle::try_current()
+        .ok()
+        .and_then(|handle| {
+            Some(handle.block_on(async { db.get_today_water_intake().await.unwrap_or_default() }))
+        })
+        .unwrap_or_default();
 
     let items: Vec<ListItem> = entries
         .iter()
@@ -417,7 +426,12 @@ fn render_water_tracking(f: &mut Frame, area: Rect, app: &App, db: &Database) {
         })
         .collect();
 
-    let total = handle.block_on(async { db.get_today_total_ml().await.unwrap_or(0) });
+    let total = tokio::runtime::Handle::try_current()
+        .ok()
+        .and_then(|handle| {
+            Some(handle.block_on(async { db.get_today_total_ml().await.unwrap_or(0) }))
+        })
+        .unwrap_or(0);
 
     let list = List::new(items).block(
         Block::default()
@@ -482,11 +496,12 @@ fn render_agents(f: &mut Frame, area: Rect, db: &Database) {
         .block(Block::default().borders(Borders::ALL));
     f.render_widget(title, chunks[0]);
 
-    // Agent information
-    let handle = tokio::runtime::Handle::current();
-
-    // Get agent information from database
-    let agents_info = handle.block_on(async {
+    // Agent information - safely handle runtime access
+    let agents_info = tokio::runtime::Handle::try_current()
+        .ok()
+        .and_then(|handle| {
+            // Get agent information from database
+            Some(handle.block_on(async {
         use crate::agents::AgentSystem;
         let agent_system = AgentSystem::new(db.clone());
 
@@ -587,7 +602,14 @@ fn render_agents(f: &mut Frame, area: Rect, db: &Database) {
         } else {
             info
         }
-    });
+    }))
+        })
+        .unwrap_or_else(|| {
+            vec![Line::from(Span::styled(
+                "Runtime unavailable - cannot fetch agent data",
+                Style::default().fg(Color::Red),
+            ))]
+        });
 
     let agents_list = Paragraph::new(agents_info)
         .block(
@@ -685,8 +707,12 @@ fn render_cron(f: &mut Frame, area: Rect, app: &App) {
 
 /// Render the settings tab.
 fn render_settings(f: &mut Frame, area: Rect, db: &Database) {
-    let handle = tokio::runtime::Handle::current();
-    let settings = handle.block_on(async { db.get_reminder_settings().await.ok() });
+    // Safely handle runtime access
+    let settings = tokio::runtime::Handle::try_current()
+        .ok()
+        .and_then(|handle| {
+            handle.block_on(async { db.get_reminder_settings().await.ok() })
+        });
 
     let text = if let Some(s) = settings {
         vec![
