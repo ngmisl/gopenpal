@@ -88,10 +88,14 @@ This document tracks planned features, improvements, and technical tasks for Gop
   - Visual routing indicator shows which agent is handling the request
   - 7 comprehensive tests covering explicit mentions and content-based routing
 
-- [ ] **Multi-Agent Conversations**
-  - Allow multiple agents to participate in single conversation
-  - Mio orchestrates responses from Hydrix and Serhant
-  - Show agent avatars/names in TUI chat interface
+- [x] **Multi-Agent Conversations** (2026-01-04)
+  - Implemented MULTI_AGENT command for Mio to orchestrate multiple specialists
+  - Syntax: [MULTI_AGENT:Agent1,Agent2,Agent3:request]
+  - Automatic collection of responses from all specified agents
+  - Visual agent identification with emojis (💧 Hydrix, ⚡ Serhant, 📋 Karen, ✨ Mio)
+  - Clear formatting with agent names and icons for easy distinction
+  - Examples in system prompt teach Mio when to use multi-agent coordination
+  - Blue [MULTI-AGENT COLLABORATION] indicator for coordinated responses
 
 - [ ] **Enhanced Tool Integration**
   - Add more STATS_TOOL commands (monthly, yearly, comparisons)

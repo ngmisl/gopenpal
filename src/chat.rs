@@ -150,6 +150,14 @@ fn build_system_prompt_from_configs(agents: &Value, tools: &Value) -> String {
          - Always explain what you're doing and confirm actions\n\
          - Be encouraging about good habits, gentle about areas to improve\n\
          - Be concise, friendly, and supportive\n\n\
+         === MULTI-AGENT COORDINATION ===\n\
+         For complex requests spanning multiple domains, use:\n\
+         [MULTI_AGENT:Agent1,Agent2,Agent3:request]\n\n\
+         Examples:\n\
+         - Full status check: [MULTI_AGENT:Hydrix,Serhant,Karen:How is the user doing today?]\n\
+         - Health & productivity: [MULTI_AGENT:Hydrix,Serhant:Any advice for better performance?]\n\
+         - Task & work balance: [MULTI_AGENT:Karen,Serhant:Help prioritize today's work]\n\n\
+         Each agent will provide their expert perspective with their unique personality.\n\n\
          === PERSONALITY CONSISTENCY ===\n\
          CRITICAL: Each agent must ALWAYS maintain their unique personality:\n\
          - Mio: Warm coordinator who bridges agents, uses 'we' and 'together'\n\
@@ -373,13 +381,15 @@ impl ChatSession {
 
             let assistant_message = &response.choices[0].message;
 
-            // Process and execute stats commands first, then cron, then delegation, then grep
+            // Process and execute commands: stats → cron → delegation → multi-agent → grep
             let (content_after_stats, stats_result) =
                 process_stats_commands(&assistant_message.content, &self.db).await;
             let (content_after_cron, cron_result) = process_cron_commands(&content_after_stats);
             let (content_after_delegate, delegate_result) =
                 process_delegate_commands(&content_after_cron, &self.db, &self.client, &self.model).await;
-            let (display_content, grep_result) = process_grep_commands(&content_after_delegate);
+            let (content_after_multi, multi_agent_result) =
+                process_multi_agent_commands(&content_after_delegate, &self.db, &self.client, &self.model).await;
+            let (display_content, grep_result) = process_grep_commands(&content_after_multi);
 
             println!("{}", display_content);
 
@@ -398,12 +408,18 @@ impl ChatSession {
                 println!("{}\n", result);
             }
 
+            if let Some(ref result) = multi_agent_result {
+                print_colored("\n[MULTI-AGENT COLLABORATION] ", Color::Blue)?;
+                println!("{}\n", result);
+            }
+
             if let Some(ref result) = grep_result {
                 print_colored("\n[GREP] ", Color::Green)?;
                 println!("{}\n", result);
             }
 
-            if stats_result.is_none() && cron_result.is_none() && delegate_result.is_none() && grep_result.is_none() {
+            if stats_result.is_none() && cron_result.is_none() && delegate_result.is_none()
+                && multi_agent_result.is_none() && grep_result.is_none() {
                 println!();
             }
 
@@ -817,6 +833,81 @@ async fn process_delegate_commands(
             );
             result_message = Some(result);
             cleaned = cleaned.replace(command, "");
+        }
+    }
+
+    // Clean up any extra whitespace
+    cleaned = cleaned.trim().to_string();
+
+    (cleaned, result_message)
+}
+
+/// Process multi-agent commands in AI response for coordinated responses.
+///
+/// This allows Mio to orchestrate multiple agents working together on complex requests.
+/// Syntax: [MULTI_AGENT:Agent1,Agent2,Agent3:request]
+///
+/// # Arguments
+///
+/// * `content` - The AI's response content
+/// * `db` - Database connection
+/// * `client` - OpenRouter client for API calls
+/// * `model` - Model to use for agent responses
+///
+/// # Returns
+///
+/// Tuple of (cleaned_content, optional_multi_agent_result)
+async fn process_multi_agent_commands(
+    content: &str,
+    db: &Database,
+    client: &OpenRouterClient,
+    model: &str,
+) -> (String, Option<String>) {
+    let mut result_message = None;
+    let mut cleaned = content.to_string();
+
+    // Check for MULTI_AGENT command
+    if let Some(start) = content.find("[MULTI_AGENT:") {
+        if let Some(end) = content[start..].find(']') {
+            let command = &content[start..start + end + 1];
+            let inner = command
+                .trim_start_matches("[MULTI_AGENT:")
+                .trim_end_matches(']');
+
+            // Parse agents and request: "Agent1,Agent2:request"
+            if let Some(colon_pos) = inner.find(':') {
+                let agents_str = &inner[..colon_pos];
+                let request = &inner[colon_pos + 1..];
+
+                let agent_names: Vec<&str> = agents_str
+                    .split(',')
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+
+                if !agent_names.is_empty() {
+                    // Collect responses from all agents
+                    let mut responses = Vec::new();
+
+                    for agent_name in agent_names {
+                        let response = delegate_to_agent(agent_name, request, db, client, model).await;
+
+                        // Get agent emoji/icon
+                        let agent_icon = match agent_name {
+                            "Hydrix" => "💧",
+                            "Serhant" => "⚡",
+                            "Karen" => "📋",
+                            "Mio" => "✨",
+                            _ => "🤖",
+                        };
+
+                        responses.push(format!("{} {}:\n{}", agent_icon, agent_name, response));
+                    }
+
+                    result_message = Some(responses.join("\n\n"));
+                    cleaned = cleaned.replace(command, "");
+                }
+            }
         }
     }
 
