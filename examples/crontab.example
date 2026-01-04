@@ -1,0 +1,22 @@
+# GopenPal Water Reminder Crontab Example
+#
+# Add this to your crontab with: crontab -e
+# This will check for water reminders every 30 minutes during work hours
+
+# Set environment variables for cron jobs
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+GOPENPAL_DB=$HOME/.gopenpal/gopenpal.db
+
+# Check for water reminder every 30 minutes
+# Format: minute hour day month weekday command
+*/30 * * * * $HOME/.cargo/bin/gopenpal reminder check
+
+# Alternative: Check every hour
+# 0 * * * * $HOME/.cargo/bin/gopenpal reminder check
+
+# Alternative: Check at specific times during work hours
+# 0 9,10,11,12,13,14,15,16,17,18 * * 1-5 $HOME/.cargo/bin/gopenpal reminder check
+
+# Note: The reminder check command will only send notifications during
+# configured work hours and days, so you can safely run it frequently.

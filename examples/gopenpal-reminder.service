@@ -1,0 +1,15 @@
+[Unit]
+Description=GopenPal Water Reminder Check
+Documentation=https://github.com/ngmisl/gopenpal
+
+[Service]
+Type=oneshot
+ExecStart=%h/.cargo/bin/gopenpal reminder check
+Environment="GOPENPAL_DB=%h/.gopenpal/gopenpal.db"
+
+# Optional: Suppress output unless there's an error
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=default.target

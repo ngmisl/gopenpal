@@ -1,0 +1,383 @@
+{
+  "tools": [
+    {
+      "name": "STATS_TOOL",
+      "category": "analytics",
+      "description": "Access water intake statistics and patterns for personalized insights",
+      "access": ["Mio", "Hydrix", "Serhant"],
+      "priority": "primary",
+      "usage_notes": "Use FIRST when user asks about habits, progress, or patterns",
+      "commands": [
+        {
+          "syntax": "[STATS:SUMMARY:{days}]",
+          "description": "Get comprehensive summary with all statistics",
+          "parameters": {
+            "days": "Number of days to analyze (7, 14, 30)"
+          },
+          "examples": [
+            "[STATS:SUMMARY:7] - Get 7-day summary",
+            "[STATS:SUMMARY:30] - Get 30-day summary"
+          ],
+          "output": "Returns: daily average, total intake, best day, hourly patterns, weekly trends, reminder effectiveness"
+        },
+        {
+          "syntax": "[STATS:HOURLY]",
+          "description": "Get hourly drinking patterns",
+          "parameters": {},
+          "examples": ["[STATS:HOURLY]"],
+          "output": "Shows which hours you drink most water, average intake per hour"
+        },
+        {
+          "syntax": "[STATS:WEEKLY]",
+          "description": "Get weekly patterns by day of week",
+          "parameters": {},
+          "examples": ["[STATS:WEEKLY]"],
+          "output": "Shows which days you drink most water, day-by-day breakdown"
+        },
+        {
+          "syntax": "[STATS:EFFECTIVENESS]",
+          "description": "Get reminder effectiveness statistics",
+          "parameters": {},
+          "examples": ["[STATS:EFFECTIVENESS]"],
+          "output": "Shows how well reminders work, response rates, best reminder times"
+        }
+      ],
+      "best_practices": [
+        "Always use STATS before making recommendations",
+        "Reference specific numbers from stats in your advice",
+        "Combine with user context for personalized insights"
+      ]
+    },
+    {
+      "name": "CRON_TOOL",
+      "category": "automation",
+      "description": "Manage automated water reminders via system cron jobs",
+      "access": ["Mio", "Hydrix", "Serhant"],
+      "priority": "primary",
+      "usage_notes": "AI should manage cron jobs as primary automation tool",
+      "commands": [
+        {
+          "syntax": "[CRON:INSTALL:{preset}]",
+          "description": "Install a cron job from preset",
+          "parameters": {
+            "preset": "Preset name (e.g., every_30min, hourly, workday_hourly)"
+          },
+          "examples": [
+            "[CRON:INSTALL:every_30min]",
+            "[CRON:INSTALL:workday_hourly]"
+          ],
+          "output": "Installs cron job and confirms schedule"
+        },
+        {
+          "syntax": "[CRON:REMOVE]",
+          "description": "Remove all gopenpal cron jobs",
+          "parameters": {},
+          "examples": ["[CRON:REMOVE]"],
+          "output": "Removes all reminders and confirms"
+        },
+        {
+          "syntax": "[CRON:STATUS]",
+          "description": "Check current cron job status",
+          "parameters": {},
+          "examples": ["[CRON:STATUS]"],
+          "output": "Shows active cron jobs and schedules"
+        }
+      ],
+      "available_presets": [
+        {
+          "name": "every_30min",
+          "description": "Every 30 minutes during work hours",
+          "schedule": "*/30 9-17 * * 1-5"
+        },
+        {
+          "name": "every_hour",
+          "description": "Every hour during work hours",
+          "schedule": "0 9-17 * * 1-5"
+        },
+        {
+          "name": "workday_hourly",
+          "description": "Hourly reminders on workdays",
+          "schedule": "0 9-17 * * 1-5"
+        },
+        {
+          "name": "aggressive",
+          "description": "Every 20 minutes during work hours",
+          "schedule": "*/20 9-17 * * 1-5"
+        }
+      ],
+      "best_practices": [
+        "Ask about user's work schedule before installing",
+        "Explain what the cron schedule means in plain English",
+        "Check effectiveness stats before changing schedules",
+        "Remove old cron before installing new ones"
+      ]
+    },
+    {
+      "name": "TASK_TOOL",
+      "category": "productivity",
+      "description": "Manage tasks, reminders, and context for productivity tracking",
+      "access": ["Mio", "Karen"],
+      "priority": "primary",
+      "usage_notes": "Karen's primary tool for task management and productivity",
+      "commands": [
+        {
+          "syntax": "[TASK:CREATE:{title}|{priority}|{due_date}]",
+          "description": "Create a new task",
+          "parameters": {
+            "title": "Task title/description",
+            "priority": "low, medium, high, urgent",
+            "due_date": "Optional due date (YYYY-MM-DD)"
+          },
+          "examples": [
+            "[TASK:CREATE:Call client about proposal|high|2026-01-05]",
+            "[TASK:CREATE:Review code PR|medium]"
+          ],
+          "output": "Task created with ID and confirmation"
+        },
+        {
+          "syntax": "[TASK:LIST:{filter}]",
+          "description": "List tasks by filter",
+          "parameters": {
+            "filter": "all, pending, completed, today, overdue, high-priority"
+          },
+          "examples": [
+            "[TASK:LIST:pending]",
+            "[TASK:LIST:high-priority]",
+            "[TASK:LIST:today]"
+          ],
+          "output": "Shows filtered task list with details"
+        },
+        {
+          "syntax": "[TASK:COMPLETE:{task_id}]",
+          "description": "Mark task as completed",
+          "parameters": {
+            "task_id": "ID of the task to complete"
+          },
+          "examples": [
+            "[TASK:COMPLETE:123]"
+          ],
+          "output": "Task marked complete with celebration"
+        },
+        {
+          "syntax": "[TASK:UPDATE:{task_id}|{field}|{value}]",
+          "description": "Update task field",
+          "parameters": {
+            "task_id": "ID of the task",
+            "field": "title, priority, due_date, notes",
+            "value": "New value for the field"
+          },
+          "examples": [
+            "[TASK:UPDATE:123|priority|urgent]",
+            "[TASK:UPDATE:123|due_date|2026-01-10]"
+          ],
+          "output": "Task updated confirmation"
+        },
+        {
+          "syntax": "[TASK:DELETE:{task_id}]",
+          "description": "Delete a task",
+          "parameters": {
+            "task_id": "ID of the task to delete"
+          },
+          "examples": [
+            "[TASK:DELETE:123]"
+          ],
+          "output": "Task deleted confirmation"
+        },
+        {
+          "syntax": "[TASK:STATS]",
+          "description": "Get productivity statistics",
+          "parameters": {},
+          "examples": [
+            "[TASK:STATS]"
+          ],
+          "output": "Shows task completion rate, productivity patterns, insights"
+        },
+        {
+          "syntax": "[TASK:REMIND:{task_id}|{time}]",
+          "description": "Set reminder for task",
+          "parameters": {
+            "task_id": "ID of the task",
+            "time": "Time for reminder (HH:MM or relative like +30min)"
+          },
+          "examples": [
+            "[TASK:REMIND:123|14:00]",
+            "[TASK:REMIND:123|+1hour]"
+          ],
+          "output": "Reminder set confirmation"
+        }
+      ],
+      "best_practices": [
+        "Always show current date/time when discussing tasks",
+        "Break large tasks into smaller subtasks",
+        "Use priority levels to help user focus",
+        "Celebrate task completions",
+        "Provide productivity insights based on patterns"
+      ]
+    },
+    {
+      "name": "GOAL_TOOL",
+      "category": "analytics",
+      "description": "Check daily water goal progress and achievement status",
+      "access": ["Mio", "Hydrix", "Serhant"],
+      "priority": "primary",
+      "usage_notes": "Use to show goal progress and motivate users toward targets",
+      "commands": [
+        {
+          "syntax": "[GOAL:STATUS]",
+          "description": "Get current daily water goal progress",
+          "parameters": {},
+          "examples": ["[GOAL:STATUS]"],
+          "output": "Shows target, current intake, progress percentage, and remaining amount"
+        }
+      ],
+      "best_practices": [
+        "Check goal progress when discussing hydration",
+        "Celebrate when user achieves goal",
+        "Provide encouragement when user is behind",
+        "Combine with STATS for deeper insights"
+      ]
+    },
+    {
+      "name": "AGENT_DELEGATE_TOOL",
+      "category": "coordination",
+      "description": "Delegate tasks to specialized agents (Mio only)",
+      "access": ["Mio"],
+      "priority": "primary",
+      "usage_notes": "Mio uses this to route requests to Hydrix or Serhant",
+      "commands": [
+        {
+          "syntax": "[DELEGATE:HYDRIX:{request}]",
+          "description": "Route health/hydration request to Hydrix",
+          "parameters": {
+            "request": "The user's request for Hydrix"
+          },
+          "examples": [
+            "[DELEGATE:HYDRIX:Check my water intake patterns]"
+          ],
+          "output": "Hydrix will handle the request and respond"
+        },
+        {
+          "syntax": "[DELEGATE:SERHANT:{request}]",
+          "description": "Route work/sales request to Serhant",
+          "parameters": {
+            "request": "The user's request for Serhant"
+          },
+          "examples": [
+            "[DELEGATE:SERHANT:Help me with my sales pipeline]"
+          ],
+          "output": "Serhant will handle the request and respond"
+        },
+        {
+          "syntax": "[DELEGATE:KAREN:{request}]",
+          "description": "Route task/productivity request to Karen",
+          "parameters": {
+            "request": "The user's request for Karen"
+          },
+          "examples": [
+            "[DELEGATE:KAREN:Help me organize my tasks for today]"
+          ],
+          "output": "Karen will handle the request and respond"
+        },
+        {
+          "syntax": "[DELEGATE:BOTH:{request}]",
+          "description": "Coordinate between multiple agents",
+          "parameters": {
+            "request": "The user's holistic request"
+          },
+          "examples": [
+            "[DELEGATE:BOTH:Help me have a productive work session]"
+          ],
+          "output": "Multiple agents coordinate their response"
+        }
+      ],
+      "routing_guidelines": {
+        "health_keywords": ["water", "hydration", "drink", "thirsty", "energy", "tired"],
+        "work_keywords": ["work", "sales", "deal", "client", "pipeline", "follow-up", "productivity"],
+        "task_keywords": ["task", "todo", "reminder", "organize", "plan", "remember", "schedule"],
+        "holistic_keywords": ["productive day", "peak performance", "optimize", "best self"]
+      },
+      "best_practices": [
+        "Explain who you're delegating to and why",
+        "Provide context to the specialist agent",
+        "Synthesize responses from multiple agents when coordinating"
+      ]
+    },
+    {
+      "name": "GREP_TOOL",
+      "category": "file_operations",
+      "description": "Search and read files within the workspace using ripgrep",
+      "access": ["Mio", "Karen"],
+      "priority": "secondary",
+      "usage_notes": "Use to help users find information in their files, read code, or search documentation",
+      "commands": [
+        {
+          "syntax": "[GREP:SEARCH:{pattern}|{path}]",
+          "description": "Search for pattern in files",
+          "parameters": {
+            "pattern": "Search pattern (regex supported)",
+            "path": "Optional path to search (defaults to current directory)"
+          },
+          "examples": [
+            "[GREP:SEARCH:TODO|src/]",
+            "[GREP:SEARCH:function.*main|.]",
+            "[GREP:SEARCH:error|logs/]"
+          ],
+          "output": "Returns matching lines with file paths and line numbers"
+        },
+        {
+          "syntax": "[GREP:READ:{file_path}]",
+          "description": "Read entire file contents",
+          "parameters": {
+            "file_path": "Path to file to read"
+          },
+          "examples": [
+            "[GREP:READ:README.md]",
+            "[GREP:READ:src/main.rs]",
+            "[GREP:READ:configs/agents.json]"
+          ],
+          "output": "Returns full file contents with line numbers"
+        },
+        {
+          "syntax": "[GREP:READ:{file_path}|{start}|{end}]",
+          "description": "Read specific lines from a file",
+          "parameters": {
+            "file_path": "Path to file to read",
+            "start": "Starting line number",
+            "end": "Ending line number"
+          },
+          "examples": [
+            "[GREP:READ:src/main.rs|1|50]",
+            "[GREP:READ:README.md|10|30]"
+          ],
+          "output": "Returns specified lines with line numbers"
+        }
+      ],
+      "security_notes": [
+        "All file operations are restricted to the workspace directory",
+        "Cannot access files outside the sandbox",
+        "Paths with .. are validated and may be rejected"
+      ],
+      "best_practices": [
+        "Use specific search patterns to avoid overwhelming results",
+        "Read only necessary file sections when possible",
+        "Explain what you're searching for and why",
+        "Respect user privacy - don't read sensitive files without permission"
+      ]
+    }
+  ],
+  "tool_usage_philosophy": {
+    "principle": "Tools enable agents to take action, not just give advice",
+    "priority_order": [
+      "1. STATS_TOOL - Always check data first",
+      "2. TASK_TOOL (Karen) - Manage tasks and productivity",
+      "3. AGENT_DELEGATE_TOOL (Mio only) - Route to specialist if needed",
+      "4. CRON_TOOL - Automate based on insights"
+    ],
+    "best_practices": [
+      "Use tools proactively, not just when asked",
+      "Combine tools for comprehensive solutions",
+      "Always explain what tools are doing",
+      "Follow up after tool execution"
+    ]
+  }
+}
