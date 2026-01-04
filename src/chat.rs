@@ -1043,6 +1043,21 @@ fn process_task_commands(content: &str) -> (String, Option<String>) {
         }
     }
 
+    // Check for TASK:REMIND (consume and warn)
+    if let Some(start) = cleaned.find("[TASK:REMIND:") {
+        let content_start = start + "[TASK:REMIND:".len();
+        if let Some(end_offset) = find_closing_bracket(&cleaned[content_start..]) {
+            let end = content_start + end_offset;
+            let command = &cleaned[start..=end];
+
+            // Just consume it and provide a helpful note
+            result_message = Some(
+                "Note: Specific task reminders are not yet supported. Please use global reminders via 'Set reminders every 30 minutes'.".to_string()
+            );
+            cleaned = cleaned.replace(command, "");
+        }
+    }
+
     (cleaned, result_message)
 }
 

@@ -80,6 +80,10 @@ impl CronManager {
             // Ensure removed
             self.remove_crontab()?;
         }
+
+        // Ensure config file exists
+        self.save_config(&config)?;
+
         Ok(())
     }
 
