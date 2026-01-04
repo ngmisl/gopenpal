@@ -21,8 +21,9 @@ ENV_FILE="${SCRIPT_DIR}/.env"
 PID_DIR="${SCRIPT_DIR}/.gopenpal_pids"
 LOG_DIR="${SCRIPT_DIR}/.gopenpal_logs"
 
-# Create directories for PIDs and logs
-mkdir -p "$PID_DIR" "$LOG_DIR"
+# Create directories for PIDs, logs, and world data
+WORLD_DIR="${SCRIPT_DIR}/world"
+mkdir -p "$PID_DIR" "$LOG_DIR" "$WORLD_DIR"
 
 echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   GopenPal - Daily Startup System     ║${NC}"

@@ -105,11 +105,6 @@ impl SecurityConfig {
         Ok(canonical_path)
     }
 
-    /// Validate multiple paths at once.
-    pub fn validate_paths<P: AsRef<Path>>(&self, paths: &[P]) -> Result<Vec<PathBuf>> {
-        paths.iter().map(|p| self.validate_path(p)).collect()
-    }
-
     /// Check if a path is within the sandbox without canonicalizing.
     ///
     /// This is useful for checking paths that don't exist yet.
@@ -205,14 +200,21 @@ impl SecurityConfig {
                 .map_err(|e| AppError::Security(format!("Failed to get current directory: {}", e)))?;
         }
 
-        // Validate that allowed_subdirs are safe paths
+        // Validate that allowed_subdirs are safe paths (don't need to exist yet)
         let subdir_paths: Vec<PathBuf> = config.allowed_subdirs.iter()
             .map(|p| config.sandbox_root.join(p))
             .collect();
 
-        // Use validate_paths to ensure all subdirs are within sandbox
-        // This validates the configuration integrity
-        let _ = config.validate_paths(&subdir_paths)?;
+        // Use is_path_safe to ensure all subdirs would be within sandbox
+        // This validates the configuration integrity without requiring paths to exist
+        for subdir in &subdir_paths {
+            if !config.is_path_safe(subdir) {
+                return Err(AppError::Security(format!(
+                    "Configured subdirectory '{}' is outside sandbox root",
+                    subdir.display()
+                )));
+            }
+        }
 
         Ok(config)
     }
