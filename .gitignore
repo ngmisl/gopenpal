@@ -62,6 +62,7 @@ web/pkg/
 # GopenPal runtime files
 .gopenpal_pids/
 .gopenpal_logs/
+world/
 *.db
 *.db-shm
 *.db-wal
