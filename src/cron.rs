@@ -7,9 +7,20 @@ use crate::error::{AppError, Result};
 use std::process::Command;
 use tracing::{error, info};
 
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CronConfig {
+    pub schedule: Option<String>,
+    pub installed: bool,
+}
+
 /// Cron job manager for gopenpal reminders.
 pub struct CronManager {
     gopenpal_bin: String,
+    config_path: PathBuf,
 }
 
 impl CronManager {
@@ -24,121 +35,141 @@ impl CronManager {
             which_gopenpal().unwrap_or_else(|| "$HOME/.cargo/bin/gopenpal".to_string())
         });
 
-        Self { gopenpal_bin: bin }
+        Self {
+            gopenpal_bin: bin,
+            config_path: PathBuf::from("world/cron.json"),
+        }
     }
 
-    /// Check if a gopenpal reminder cron job is installed.
-    ///
-    /// # Returns
-    ///
-    /// `Ok(Some(cron_line))` if installed, `Ok(None)` if not installed
-    ///
-    /// # Errors
-    ///
-    /// Returns error if crontab command fails
-    pub fn is_installed(&self) -> Result<Option<String>> {
-        let output = Command::new("crontab")
-            .arg("-l")
-            .output()
-            .map_err(AppError::Io)?;
-
-        if !output.status.success() {
-            // No crontab installed yet
-            return Ok(None);
+    /// Load config from file.
+    fn load_config(&self) -> Result<CronConfig> {
+        if !self.config_path.exists() {
+            return Ok(CronConfig {
+                schedule: None,
+                installed: false,
+            });
         }
+        let content = fs::read_to_string(&self.config_path)?;
+        let config: CronConfig = serde_json::from_str(&content).unwrap_or(CronConfig {
+            schedule: None,
+            installed: false,
+        });
+        Ok(config)
+    }
 
-        let crontab = String::from_utf8_lossy(&output.stdout);
+    /// Save config to file.
+    fn save_config(&self, config: &CronConfig) -> Result<()> {
+        if let Some(parent) = self.config_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let content =
+            serde_json::to_string_pretty(config).map_err(|e| AppError::Config(e.to_string()))?;
+        fs::write(&self.config_path, content)?;
+        Ok(())
+    }
 
-        // Look for gopenpal reminder check entries
-        for line in crontab.lines() {
-            if line.contains("gopenpal") && line.contains("reminder check") {
-                return Ok(Some(line.to_string()));
+    /// Sync system crontab with local config (idempotent).
+    pub fn sync(&self) -> Result<()> {
+        let config = self.load_config()?;
+        if config.installed {
+            if let Some(schedule) = &config.schedule {
+                // Force install/update
+                self.apply_crontab(schedule)?;
             }
+        } else {
+            // Ensure removed
+            self.remove_crontab()?;
         }
+        Ok(())
+    }
 
-        Ok(None)
+    /// Check if a gopenpal reminder cron job is installed (in config).
+    pub fn is_installed(&self) -> Result<Option<String>> {
+        let config = self.load_config()?;
+        if config.installed {
+            Ok(config.schedule)
+        } else {
+            Ok(None)
+        }
     }
 
     /// Install a cron job for water reminders.
-    ///
-    /// # Arguments
-    ///
-    /// * `schedule` - Cron schedule expression (e.g., "*/30 * * * *" for every 30 minutes)
-    ///
-    /// # Errors
-    ///
-    /// Returns error if crontab modification fails
     pub fn install(&self, schedule: &str) -> Result<()> {
-        // Get current crontab
-        let current = self.get_crontab()?;
-
-        // Check if already installed
-        if self.is_installed()?.is_some() {
-            return Err(AppError::Config(
-                "Gopenpal cron job already installed. Remove it first.".to_string(),
-            ));
+        // validate schedule simple check
+        if schedule.split_whitespace().count() != 5 {
+            return Err(AppError::Config("Invalid cron schedule format".to_string()));
         }
 
-        // Add new entry
-        let new_entry = format!("{} {} reminder check", schedule, self.gopenpal_bin);
-        let mut new_crontab = current;
-        if !new_crontab.is_empty() && !new_crontab.ends_with('\n') {
-            new_crontab.push('\n');
-        }
-        new_crontab.push_str(&new_entry);
-        new_crontab.push('\n');
+        self.apply_crontab(schedule)?;
 
-        // Install new crontab
-        self.set_crontab(&new_crontab)?;
+        // Save state
+        let config = CronConfig {
+            schedule: Some(schedule.to_string()),
+            installed: true,
+        };
+        self.save_config(&config)?;
 
-        info!("Installed cron job: {}", new_entry);
+        info!("Installed cron job: {}", schedule);
         Ok(())
     }
 
     /// Remove the gopenpal cron job.
-    ///
-    /// # Errors
-    ///
-    /// Returns error if crontab modification fails
     pub fn remove(&self) -> Result<()> {
-        let current = self.get_crontab()?;
+        self.remove_crontab()?;
 
-        // Filter out gopenpal reminder check lines
-        let new_crontab: String = current
-            .lines()
-            .filter(|line| !(line.contains("gopenpal") && line.contains("reminder check")))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        // Add trailing newline if not empty
-        let new_crontab = if new_crontab.is_empty() {
-            String::new()
-        } else {
-            format!("{}\n", new_crontab)
+        // Save state
+        let config = CronConfig {
+            schedule: None,
+            installed: false,
         };
-
-        self.set_crontab(&new_crontab)?;
+        self.save_config(&config)?;
 
         info!("Removed gopenpal cron job");
         Ok(())
     }
 
     /// Update the cron schedule.
-    ///
-    /// # Arguments
-    ///
-    /// * `new_schedule` - New cron schedule expression
-    ///
-    /// # Errors
-    ///
-    /// Returns error if crontab modification fails or job not installed
     pub fn update_schedule(&self, new_schedule: &str) -> Result<()> {
-        // Remove old job
-        self.remove()?;
+        self.install(new_schedule)
+    }
 
-        // Install with new schedule
-        self.install(new_schedule)?;
+    /// Internal: Apply to system crontab
+    fn apply_crontab(&self, schedule: &str) -> Result<()> {
+        let current = self.get_crontab()?;
 
+        // Remove existing gopenpal lines to avoid duplicates
+        let mut lines: Vec<String> = current
+            .lines()
+            .filter(|line| !(line.contains("gopenpal") && line.contains("reminder check")))
+            .map(|s| s.to_string())
+            .collect();
+
+        // Add new line
+        let new_entry = format!("{} {} reminder check", schedule, self.gopenpal_bin);
+        lines.push(new_entry);
+
+        // Reassemble
+        let new_crontab = lines.join("\n") + "\n";
+        self.set_crontab(&new_crontab)?;
+        Ok(())
+    }
+
+    /// Internal: Remove from system crontab
+    fn remove_crontab(&self) -> Result<()> {
+        let current = self.get_crontab()?;
+        let new_crontab: String = current
+            .lines()
+            .filter(|line| !(line.contains("gopenpal") && line.contains("reminder check")))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let final_crontab = if new_crontab.is_empty() {
+            String::new()
+        } else {
+            new_crontab + "\n"
+        };
+
+        self.set_crontab(&final_crontab)?;
         Ok(())
     }
 
@@ -178,9 +209,7 @@ impl CronManager {
 
         if let Some(mut stdin) = child.stdin.take() {
             use std::io::Write;
-            stdin
-                .write_all(content.as_bytes())
-                .map_err(AppError::Io)?;
+            stdin.write_all(content.as_bytes()).map_err(AppError::Io)?;
         }
 
         let status = child.wait().map_err(AppError::Io)?;

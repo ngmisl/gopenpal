@@ -14,16 +14,17 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Gauge, List, ListItem, Paragraph, Tabs},
+    widgets::{Block, Borders, Gauge, List, ListItem, Paragraph, Tabs, Wrap},
     Frame, Terminal,
 };
 use std::io;
 use tokio::sync::mpsc;
 use tracing::info;
 
+use crate::agents::{Agent, AgentSystem};
 use crate::chat::ChatSession;
 use crate::cron::CronManager;
-use crate::db::Database;
+use crate::db::{Database, ReminderSettings, WaterIntake};
 use crate::error::Result;
 use crate::openrouter::OpenRouterClient;
 
@@ -47,6 +48,14 @@ struct App {
     cron_selected: usize,
     /// Status message for cron operations
     cron_status: String,
+    /// Cached water total for today
+    today_water_total: i64,
+    /// Cached water entries for today
+    today_water_entries: Vec<WaterIntake>,
+    /// Cached reminder settings
+    settings: Option<ReminderSettings>,
+    /// Cached agents
+    agents: Vec<Agent>,
 }
 
 #[derive(PartialEq)]
@@ -68,7 +77,33 @@ impl Default for App {
             chat_scroll: 0,
             cron_selected: 0,
             cron_status: String::new(),
+            today_water_total: 0,
+            today_water_entries: Vec::new(),
+            settings: None,
+            agents: Vec::new(),
         }
+    }
+}
+
+impl App {
+    /// Update application data from database
+    async fn update_data(&mut self, db: &Database) {
+        // Fetch water data
+        self.today_water_total = db.get_today_total_ml().await.unwrap_or(0);
+        self.today_water_entries = db.get_today_water_intake().await.unwrap_or_default();
+
+        // Fetch settings
+        self.settings = db.get_reminder_settings().await.ok();
+
+        // Fetch agents
+        let agent_system = AgentSystem::new(db.clone());
+        let mut agents = Vec::new();
+        for agent_name in &["Hydrix", "Serhant", "Mio", "Karen"] {
+            if let Ok(Some(agent)) = agent_system.get_agent(agent_name).await {
+                agents.push(agent);
+            }
+        }
+        self.agents = agents;
     }
 }
 
@@ -118,7 +153,11 @@ async fn run_app(
     rx: &mut mpsc::Receiver<String>,
 ) -> Result<()> {
     loop {
-        terminal.draw(|f| ui(f, app, db))?;
+        // Update data asynchronously before rendering
+        // In a real app we might want to throttle this, but for now it ensures fresh data
+        app.update_data(db).await;
+
+        terminal.draw(|f| ui(f, app))?;
 
         // Handle async chat responses
         if let Ok(msg) = rx.try_recv() {
@@ -149,10 +188,16 @@ async fn run_app(
                             app.input_mode = InputMode::EditingChat;
                         }
                         KeyCode::Up if app.current_tab == 2 => {
-                            app.chat_scroll = app.chat_scroll.saturating_sub(1);
+                            app.chat_scroll = app.chat_scroll.saturating_add(1);
                         }
                         KeyCode::Down if app.current_tab == 2 => {
-                            app.chat_scroll = app.chat_scroll.saturating_add(1);
+                            app.chat_scroll = app.chat_scroll.saturating_sub(1);
+                        }
+                        KeyCode::PageUp if app.current_tab == 2 => {
+                            app.chat_scroll = app.chat_scroll.saturating_add(10);
+                        }
+                        KeyCode::PageDown if app.current_tab == 2 => {
+                            app.chat_scroll = app.chat_scroll.saturating_sub(10);
                         }
                         // Cron tab controls
                         KeyCode::Up if app.current_tab == 3 => {
@@ -240,12 +285,17 @@ async fn run_app(
                                         "anthropic/claude-3.5-sonnet".to_string(),
                                     );
 
-                                    if let Ok(response) = session.send_message(&input).await {
-                                        let _ = tx_clone.send(response).await;
+                                    match session.send_message(&input).await {
+                                        Ok(response) => {
+                                            let _ = tx_clone.send(response).await;
+                                        }
+                                        Err(e) => {
+                                            let _ = tx_clone.send(format!("Error: {}", e)).await;
+                                        }
                                     }
                                 });
                             }
-                            app.input_mode = InputMode::Normal;
+                            // Do NOT switch back to Normal mode, keep chatting
                         }
                         KeyCode::Char(c) => {
                             app.chat_input.push(c);
@@ -254,11 +304,28 @@ async fn run_app(
                             app.chat_input.pop();
                         }
                         KeyCode::Esc => {
+                            // Only Esc leaves chat mode now
                             app.input_mode = InputMode::Normal;
                             app.chat_input.clear();
                         }
                         _ => {}
                     },
+                }
+
+                // Auto-enter chat mode if in Chat tab
+                if app.current_tab == 2 && app.input_mode == InputMode::Normal {
+                    match key.code {
+                        KeyCode::Char(c)
+                            if c != 'q' && c != 'h' && c != 'l' && c != 'j' && c != 'k' =>
+                        {
+                            app.input_mode = InputMode::EditingChat;
+                            app.chat_input.push(c);
+                        }
+                        KeyCode::Enter => {
+                            app.input_mode = InputMode::EditingChat;
+                        }
+                        _ => {}
+                    }
                 }
             }
         }
@@ -270,7 +337,7 @@ async fn run_app(
 /// This function is called on each frame to render the current state
 /// of the application. It uses blocking calls to fetch data, which is
 /// acceptable here as rendering should be fast.
-fn ui(f: &mut Frame, app: &App, db: &Database) {
+fn ui(f: &mut Frame, app: &App) {
     let size = f.area();
 
     // Create the layout
@@ -297,18 +364,18 @@ fn ui(f: &mut Frame, app: &App, db: &Database) {
 
     // Render content based on selected tab
     match app.current_tab {
-        0 => render_dashboard(f, chunks[1], db),
-        1 => render_water_tracking(f, chunks[1], app, db),
+        0 => render_dashboard(f, chunks[1], app),
+        1 => render_water_tracking(f, chunks[1], app),
         2 => render_chat(f, chunks[1], app),
-        3 => render_agents(f, chunks[1], db),
+        3 => render_agents(f, chunks[1], app),
         4 => render_cron(f, chunks[1], app),
-        5 => render_settings(f, chunks[1], db),
+        5 => render_settings(f, chunks[1], app),
         _ => {}
     }
 }
 
 /// Render the dashboard tab.
-fn render_dashboard(f: &mut Frame, area: Rect, db: &Database) {
+fn render_dashboard(f: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -328,14 +395,8 @@ fn render_dashboard(f: &mut Frame, area: Rect, db: &Database) {
     .block(Block::default().borders(Borders::ALL));
     f.render_widget(welcome, chunks[0]);
 
-    // Water intake stats - safely handle runtime access
-    let total_ml = tokio::runtime::Handle::try_current()
-        .ok()
-        .and_then(|handle| {
-            // Use block_on only if we have a handle
-            Some(handle.block_on(async { db.get_today_total_ml().await.unwrap_or(0) }))
-        })
-        .unwrap_or(0); // Default to 0 if no runtime available
+    // Water intake stats - use cached data
+    let total_ml = app.today_water_total;
 
     let daily_goal = 2000; // 2 liters
     let progress = (total_ml as f64 / daily_goal as f64).min(1.0);
@@ -382,7 +443,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, db: &Database) {
 }
 
 /// Render the water tracking tab.
-fn render_water_tracking(f: &mut Frame, area: Rect, app: &App, db: &Database) {
+fn render_water_tracking(f: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(3), Constraint::Min(0)])
@@ -404,13 +465,8 @@ fn render_water_tracking(f: &mut Frame, area: Rect, app: &App, db: &Database) {
         );
     f.render_widget(input, chunks[0]);
 
-    // Recent entries - safely handle runtime access
-    let entries = tokio::runtime::Handle::try_current()
-        .ok()
-        .and_then(|handle| {
-            Some(handle.block_on(async { db.get_today_water_intake().await.unwrap_or_default() }))
-        })
-        .unwrap_or_default();
+    // Recent entries - use cached data
+    let entries = &app.today_water_entries;
 
     let items: Vec<ListItem> = entries
         .iter()
@@ -426,12 +482,7 @@ fn render_water_tracking(f: &mut Frame, area: Rect, app: &App, db: &Database) {
         })
         .collect();
 
-    let total = tokio::runtime::Handle::try_current()
-        .ok()
-        .and_then(|handle| {
-            Some(handle.block_on(async { db.get_today_total_ml().await.unwrap_or(0) }))
-        })
-        .unwrap_or(0);
+    let total = app.today_water_total;
 
     let list = List::new(items).block(
         Block::default()
@@ -449,18 +500,31 @@ fn render_chat(f: &mut Frame, area: Rect, app: &App) {
         .split(area);
 
     // Chat messages
-    let messages: Vec<ListItem> = app
-        .chat_messages
-        .iter()
-        .map(|m| ListItem::new(m.clone()))
-        .collect();
+    let messages: String = app.chat_messages.join("\n\n");
 
-    let messages_list = List::new(messages).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Chat History (↑/↓ to scroll)"),
-    );
-    f.render_widget(messages_list, chunks[0]);
+    // Calculate effective scroll to show bottom by default
+    // Estimate lines count - AGGRESSIVE estimation to handle word wrapping safely
+    let width = chunks[0].width.saturating_sub(4) as usize; // Reduce width buffer
+    let wrap_width = (width as f64 * 0.9) as usize; // Assume 90% utilization due to word wrap
+    let total_lines: usize = messages
+        .lines()
+        .map(|l| (l.len() + wrap_width - 1) / wrap_width.max(1)) // Ceiling division with safety margin
+        .sum();
+    let view_height = chunks[0].height.saturating_sub(2) as usize;
+    let max_scroll = total_lines.saturating_sub(view_height) as u16;
+
+    // app.chat_scroll is "lines from bottom"
+    let scroll_offset = max_scroll.saturating_sub(app.chat_scroll);
+
+    let messages_paragraph = Paragraph::new(messages)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Chat History (↑/↓ to scroll)"),
+        )
+        .wrap(Wrap { trim: false })
+        .scroll((scroll_offset, 0));
+    f.render_widget(messages_paragraph, chunks[0]);
 
     // Input area
     let input_style = if app.input_mode == InputMode::EditingChat {
@@ -469,147 +533,125 @@ fn render_chat(f: &mut Frame, area: Rect, app: &App) {
         Style::default()
     };
 
+    let title = if app.current_tab == 2 {
+        "Message - Type to chat, Enter to send, Esc to cancel"
+    } else {
+        "Message"
+    };
+
     let input = Paragraph::new(app.chat_input.as_str())
         .style(input_style)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Message - Press 'c' to chat, Enter to send, Esc to cancel"),
-        );
+        .block(Block::default().borders(Borders::ALL).title(title));
     f.render_widget(input, chunks[1]);
 }
 
 /// Render the agents status tab.
-fn render_agents(f: &mut Frame, area: Rect, db: &Database) {
+fn render_agents(f: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Min(0),
-        ])
+        .constraints([Constraint::Length(3), Constraint::Min(0)])
         .split(area);
 
     // Title
     let title = Paragraph::new("Agent Status Dashboard")
-        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
     f.render_widget(title, chunks[0]);
 
-    // Agent information - safely handle runtime access
-    let agents_info = tokio::runtime::Handle::try_current()
-        .ok()
-        .and_then(|handle| {
-            // Get agent information from database
-            Some(handle.block_on(async {
-        use crate::agents::AgentSystem;
-        let agent_system = AgentSystem::new(db.clone());
-
+    // Agent information - use cached data
+    let agents_info: Vec<Line> = if app.agents.is_empty() {
+        vec![Line::from(Span::styled(
+            "No agents found or DB unavailable. Run 'gopenpal init' if first run.",
+            Style::default().fg(Color::Red),
+        ))]
+    } else {
         let mut info = Vec::new();
+        for agent in &app.agents {
+            let mood_emoji = match agent.current_mood.as_str() {
+                // Hydrix moods
+                "joyful" => "🎉",
+                "concerned" => "😟",
+                "proud" => "⭐",
+                "nostalgic" => "📜",
+                "playful" => "😊",
+                "contemplative" => "🤔",
+                "hopeful" => "🌊",
+                // Serhant moods
+                "energized" => "⚡",
+                "focused" => "🎯",
+                "fired_up" => "🔥",
+                "coaching" => "📚",
+                "closing" => "💼",
+                // Mio moods
+                "attentive" => "🌸",
+                "coordinating" => "🔄",
+                "nurturing" => "💝",
+                "strategic" => "🧩",
+                // Karen moods
+                "ready" => "📋",
+                "urgent" => "⚠️",
+                "satisfied" => "✅",
+                _ => "❓",
+            };
 
-        // Fetch all four agents
-        for agent_name in &["Hydrix", "Serhant", "Mio", "Karen"] {
-            if let Ok(Some(agent)) = agent_system.get_agent(agent_name).await {
-                let mood_emoji = match agent.current_mood.as_str() {
-                    // Hydrix moods
-                    "joyful" => "🎉",
-                    "concerned" => "😟",
-                    "proud" => "⭐",
-                    "nostalgic" => "📜",
-                    "playful" => "😊",
-                    "contemplative" => "🤔",
-                    "hopeful" => "🌊",
-                    // Serhant moods
-                    "energized" => "⚡",
-                    "focused" => "🎯",
-                    "fired_up" => "🔥",
-                    "coaching" => "📚",
-                    "closing" => "💼",
-                    // Mio moods
-                    "attentive" => "🌸",
-                    "coordinating" => "🔄",
-                    "nurturing" => "💝",
-                    "strategic" => "🧩",
-                    // Karen moods
-                    "ready" => "📋",
-                    "urgent" => "⚠️",
-                    "satisfied" => "✅",
-                    _ => "❓",
+            let relationship_bar = {
+                let filled = (agent.relationship_level / 10) as usize;
+                let empty = 10 - filled;
+                format!("[{}{}]", "█".repeat(filled), "░".repeat(empty))
+            };
+
+            info.push(Line::from(vec![
+                Span::styled(
+                    format!("{} {} ", mood_emoji, agent.name),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!("({})", agent.title),
+                    Style::default().fg(Color::Gray),
+                ),
+            ]));
+
+            info.push(Line::from(vec![
+                Span::raw("  Mood: "),
+                Span::styled(
+                    agent.current_mood.clone(),
+                    Style::default().fg(Color::Yellow),
+                ),
+            ]));
+
+            info.push(Line::from(vec![
+                Span::raw("  Relationship: "),
+                Span::styled(relationship_bar, Style::default().fg(Color::Green)),
+                Span::raw(format!(" {}/100", agent.relationship_level)),
+            ]));
+
+            if let Some(last_interaction) = agent.last_interaction {
+                let time_ago = Local::now().signed_duration_since(last_interaction);
+                let time_str = if time_ago.num_hours() > 0 {
+                    format!("{}h ago", time_ago.num_hours())
+                } else if time_ago.num_minutes() > 0 {
+                    format!("{}m ago", time_ago.num_minutes())
+                } else {
+                    "just now".to_string()
                 };
 
-                let relationship_bar = {
-                    let filled = (agent.relationship_level / 10) as usize;
-                    let empty = 10 - filled;
-                    format!("[{}{}]", "█".repeat(filled), "░".repeat(empty))
-                };
-
                 info.push(Line::from(vec![
-                    Span::styled(
-                        format!("{} {} ", mood_emoji, agent.name),
-                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled(
-                        format!("({})", agent.title),
-                        Style::default().fg(Color::Gray),
-                    ),
+                    Span::raw("  Last seen: "),
+                    Span::styled(time_str, Style::default().fg(Color::DarkGray)),
                 ]));
-
-                info.push(Line::from(vec![
-                    Span::raw("  Mood: "),
-                    Span::styled(
-                        agent.current_mood.clone(),
-                        Style::default().fg(Color::Yellow),
-                    ),
-                ]));
-
-                info.push(Line::from(vec![
-                    Span::raw("  Relationship: "),
-                    Span::styled(
-                        relationship_bar,
-                        Style::default().fg(Color::Green),
-                    ),
-                    Span::raw(format!(" {}/100", agent.relationship_level)),
-                ]));
-
-                if let Some(last_interaction) = agent.last_interaction {
-                    let time_ago = Local::now().signed_duration_since(last_interaction);
-                    let time_str = if time_ago.num_hours() > 0 {
-                        format!("{}h ago", time_ago.num_hours())
-                    } else if time_ago.num_minutes() > 0 {
-                        format!("{}m ago", time_ago.num_minutes())
-                    } else {
-                        "just now".to_string()
-                    };
-
-                    info.push(Line::from(vec![
-                        Span::raw("  Last seen: "),
-                        Span::styled(
-                            time_str,
-                            Style::default().fg(Color::DarkGray),
-                        ),
-                    ]));
-                }
-
-                info.push(Line::raw(""));
             }
-        }
 
-        if info.is_empty() {
-            vec![Line::from(Span::styled(
-                "No agents found. Run 'gopenpal init' to initialize the database.",
-                Style::default().fg(Color::Red),
-            ))]
-        } else {
-            info
+            info.push(Line::raw(""));
         }
-    }))
-        })
-        .unwrap_or_else(|| {
-            vec![Line::from(Span::styled(
-                "Runtime unavailable - cannot fetch agent data",
-                Style::default().fg(Color::Red),
-            ))]
-        });
+        info
+    };
 
     let agents_list = Paragraph::new(agents_info)
         .block(
@@ -706,13 +748,9 @@ fn render_cron(f: &mut Frame, area: Rect, app: &App) {
 }
 
 /// Render the settings tab.
-fn render_settings(f: &mut Frame, area: Rect, db: &Database) {
-    // Safely handle runtime access
-    let settings = tokio::runtime::Handle::try_current()
-        .ok()
-        .and_then(|handle| {
-            handle.block_on(async { db.get_reminder_settings().await.ok() })
-        });
+fn render_settings(f: &mut Frame, area: Rect, app: &App) {
+    // Use cached settings
+    let settings = &app.settings;
 
     let text = if let Some(s) = settings {
         vec![

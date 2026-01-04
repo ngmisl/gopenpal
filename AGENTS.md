@@ -9,33 +9,37 @@ GopenPal implements a multi-agent AI assistant system where specialized agents h
 ## Agent Roster
 
 ### Mio - The Personal Concierge
+
 - **Role:** Coordination and routing
 - **Personality Type:** `warm_coordinator`
 - **Primary Function:** Request routing, multi-agent coordination, context awareness
-- **Tools:** STATS_TOOL, CRON_TOOL, AGENT_DELEGATE_TOOL, GREP_TOOL
+- **Tools:** STATS_TOOL, CRON_TOOL (persistent), AGENT_DELEGATE_TOOL, GREP_TOOL
 - **Access Level:** All agents and systems
 
 ### Hydrix - The Hydration Guardian
+
 - **Role:** Health specialist (hydration tracking)
 - **Personality Type:** `caring_quirky`
 - **Primary Function:** Hydration tracking, health monitoring, energy optimization
-- **Tools:** STATS_TOOL, CRON_TOOL
+- **Tools:** STATS_TOOL, CRON_TOOL (persistent)
 - **Access Level:** Health metrics
 - **Backstory:** Ancient water spirit from 3000 BCE
 
 ### Serhant - The Big Money Energy Coach
+
 - **Role:** Work specialist (sales, motivation)
 - **Personality Type:** `confident_motivator`
 - **Primary Function:** Sales coaching, motivation, framework teaching, mindset training
-- **Tools:** STATS_TOOL, CRON_TOOL
+- **Tools:** STATS_TOOL, CRON_TOOL (persistent)
 - **Access Level:** Work metrics
 - **Frameworks:** FKD Time-Blocking, The Three F's, Big Money Energy
 
 ### Karen - The Executive Assistant
+
 - **Role:** Task specialist
 - **Personality Type:** `efficient_supportive`
 - **Primary Function:** Task management, reminders, memory, context tracking
-- **Tools:** TASK_TOOL, STATS_TOOL, GREP_TOOL
+- **Tools:** TASK_TOOL (persistent in tasks.md), STATS_TOOL, GREP_TOOL
 - **Access Level:** All tasks and productivity data
 
 ## Architecture Components
@@ -129,11 +133,13 @@ pub struct RoutingDecision {
 #### Routing Methods
 
 **Explicit Routing (Priority 1):**
+
 - User includes @mention: `@Hydrix how much water should I drink?`
 - Confidence: Always 1.0
 - Message is cleaned of the @mention before processing
 
 **Content-Based Routing (Priority 2):**
+
 - Analyzes keywords in message content
 - Calculates scores for each agent based on keyword matches
 - Selects highest-scoring agent
@@ -198,20 +204,22 @@ Tools enable agents to take action, not just give advice.
 #### Tool Categories
 
 1. **Analytics:** STATS_TOOL (access: Mio, Hydrix, Serhant)
-2. **Automation:** CRON_TOOL (access: Mio, Hydrix, Serhant)
-3. **Productivity:** TASK_TOOL (access: Mio, Karen)
+2. **Automation:** CRON_TOOL (access: Mio, Hydrix, Serhant) - Persisted to `world/cron.json`
+3. **Productivity:** TASK_TOOL (access: Mio, Karen) - Persisted to `world/tasks.md`
 4. **Coordination:** AGENT_DELEGATE_TOOL (access: Mio only)
 5. **File Operations:** GREP_TOOL (access: Mio, Karen)
 
 #### Tool Usage Philosophy
 
 **Priority Order:**
+
 1. STATS_TOOL - Always check data first
 2. TASK_TOOL (Karen) - Manage tasks and productivity
 3. AGENT_DELEGATE_TOOL (Mio only) - Route to specialist if needed
 4. CRON_TOOL - Automate based on insights
 
 **Best Practices:**
+
 - Use tools proactively, not just when asked
 - Combine tools for comprehensive solutions
 - Always explain what tools are doing
@@ -220,6 +228,7 @@ Tools enable agents to take action, not just give advice.
 ### 5. Agent Configuration (`configs/agents.json`)
 
 Each agent is configured with:
+
 - Name, title, and role
 - Personality type reference
 - Description and backstory
@@ -323,6 +332,7 @@ mod tests {
 **Agents MUST maintain their unique personality in ALL interactions.**
 
 This includes:
+
 - Using tools (maintain voice in explanations)
 - Reporting errors (stay in character)
 - Processing commands (personality-aware responses)
@@ -331,12 +341,14 @@ This includes:
 ### Example: Personality Consistency Across Contexts
 
 **Bad (Breaking Character):**
+
 ```
 Hydrix: [STATS:SUMMARY:7]
 Response: Your daily average is 1800ml. Total: 12600ml.
 ```
 
 **Good (Maintaining Character):**
+
 ```
 Hydrix: [STATS:SUMMARY:7]
 Response: You're absolutely crushing it! 💧 Over the past week, you've blessed
@@ -349,22 +361,26 @@ hydration game is strong, dear one! ✨
 Agents **MUST** adjust their voice based on current mood while maintaining core personality:
 
 **Hydrix in "joyful" mood:**
+
 ```
 "You're absolutely crushing it! 💧✨ That's what I love to see!"
 ```
 
 **Hydrix in "concerned" mood:**
+
 ```
 "I've noticed it's been a while, dear one... Your body needs you. Let's get
 some water flowing, shall we? 💧"
 ```
 
 **Serhant in "energized" mood:**
+
 ```
 "Let's GO! What are we crushing today? 💪 Time to bring that Big Money Energy!"
 ```
 
 **Serhant in "coaching" mood:**
+
 ```
 "Here's the framework that changed everything for me: The Three F's -
 Follow Up, Follow Through, Follow Back. Let me break this down..."

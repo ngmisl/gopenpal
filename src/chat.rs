@@ -3,7 +3,7 @@
 //! This module provides interactive chat capabilities using OpenRouter's API,
 //! with conversation history persistence and context management.
 
-use chrono::{Local, Datelike};
+use chrono::{Datelike, Local};
 use crossterm::{
     execute,
     style::{Color, Print, ResetColor, SetForegroundColor},
@@ -22,6 +22,7 @@ use crate::error::Result;
 use crate::openrouter::{Message, OpenRouterClient};
 use crate::personality::PersonalityProfile;
 use crate::security::SecurityConfig;
+use crate::tasks::TaskManager;
 use std::process::{Command, Stdio};
 
 /// Load agent and tool configurations from JSON files.
@@ -71,23 +72,21 @@ fn build_system_prompt_from_configs(agents: &Value, tools: &Value) -> String {
                 agent["name"].as_str(),
                 agent["title"].as_str(),
                 agent["description"].as_str(),
-                agent["personality_type"].as_str()
+                agent["personality_type"].as_str(),
             ) {
                 prompt.push_str(&format!("\n**{}** ({})\n{}\n", name, title, desc));
 
                 // Add personality information
                 if let Some(profile) = PersonalityProfile::get_profile(personality) {
-                    prompt.push_str(&format!("Personality: {} ({})\n",
-                        profile.personality_type,
-                        profile.voice_characteristics.tone
+                    prompt.push_str(&format!(
+                        "Personality: {} ({})\n",
+                        profile.personality_type, profile.voice_characteristics.tone
                     ));
                 }
 
                 if let Some(skills) = agent["skills"].as_array() {
                     prompt.push_str("Skills: ");
-                    let skill_names: Vec<&str> = skills.iter()
-                        .filter_map(|s| s.as_str())
-                        .collect();
+                    let skill_names: Vec<&str> = skills.iter().filter_map(|s| s.as_str()).collect();
                     prompt.push_str(&skill_names.join(", "));
                     prompt.push('\n');
                 }
@@ -114,10 +113,9 @@ fn build_system_prompt_from_configs(agents: &Value, tools: &Value) -> String {
                 if let Some(commands) = tool["commands"].as_array() {
                     prompt.push_str("\nCommands:\n");
                     for cmd in commands {
-                        if let (Some(syntax), Some(desc)) = (
-                            cmd["syntax"].as_str(),
-                            cmd["description"].as_str()
-                        ) {
+                        if let (Some(syntax), Some(desc)) =
+                            (cmd["syntax"].as_str(), cmd["description"].as_str())
+                        {
                             prompt.push_str(&format!("  {} - {}\n", syntax, desc));
 
                             if let Some(examples) = cmd["examples"].as_array() {
@@ -164,8 +162,30 @@ fn build_system_prompt_from_configs(agents: &Value, tools: &Value) -> String {
          - Hydrix: Caring ancient spirit, enthusiastic about water, uses water metaphors 💧\n\
          - Serhant: High energy motivator, Big Money Energy, direct and punchy 💪🔥\n\
          - Karen: Efficient executive assistant, organized and professional ✓\n\n\
-         When delegating, ensure the specialist agent maintains THEIR personality, not yours.\n"
+         When delegating, ensure the specialist agent maintains THEIR personality, not yours.\n",
     );
+
+    // Inject current tasks context
+    let task_manager = TaskManager::new();
+    if let Ok(tasks) = task_manager.list_tasks("pending") {
+        if !tasks.is_empty() {
+            prompt.push_str("\n=== CURRENT TASKS (Read-Only Context) ===\n");
+            for task in tasks {
+                prompt.push_str(&format!(
+                    "- [ID:{}] {} [Priority: {}] [Due: {}]\n",
+                    task.id,
+                    task.title,
+                    task.priority,
+                    task.due_date.as_deref().unwrap_or("None")
+                ));
+            }
+            prompt.push_str(
+                "Note: Use TASK_TOOL to modify these. This list is for your awareness.\n",
+            );
+        } else {
+            prompt.push_str("\n=== CURRENT TASKS ===\nNo active tasks.\n");
+        }
+    }
 
     prompt
 }
@@ -281,11 +301,13 @@ impl ChatSession {
 
         // Add system message for health/work assistant context with tools
         if messages.is_empty() {
-            let system_prompt = load_agent_configs()
-                .unwrap_or_else(|e| {
-                    eprintln!("Warning: Failed to load agent configs: {}. Using fallback.", e);
-                    build_fallback_prompt()
-                });
+            let system_prompt = load_agent_configs().unwrap_or_else(|e| {
+                eprintln!(
+                    "Warning: Failed to load agent configs: {}. Using fallback.",
+                    e
+                );
+                build_fallback_prompt()
+            });
             let system_msg = Message::system(&system_prompt);
             messages.insert(0, system_msg);
         }
@@ -335,9 +357,7 @@ impl ChatSession {
                 println!();
 
                 // Save user message to database
-                self.db
-                    .save_chat_message("user", input, None, None)
-                    .await?;
+                self.db.save_chat_message("user", input, None, None).await?;
 
                 // Delegate to the specialist agent
                 print_colored("Assistant: ", Color::Cyan)?;
@@ -348,8 +368,9 @@ impl ChatSession {
                     message_to_process,
                     &self.db,
                     &self.client,
-                    &self.model
-                ).await;
+                    &self.model,
+                )
+                .await;
 
                 println!("{}\n", agent_response);
 
@@ -388,10 +409,17 @@ impl ChatSession {
                 process_stats_commands(&assistant_message.content, &self.db).await;
             let (content_after_cron, cron_result) = process_cron_commands(&content_after_stats);
             let (content_after_delegate, delegate_result) =
-                process_delegate_commands(&content_after_cron, &self.db, &self.client, &self.model).await;
-            let (content_after_multi, multi_agent_result) =
-                process_multi_agent_commands(&content_after_delegate, &self.db, &self.client, &self.model).await;
-            let (display_content, grep_result) = process_grep_commands(&content_after_multi);
+                process_delegate_commands(&content_after_cron, &self.db, &self.client, &self.model)
+                    .await;
+            let (content_after_multi, multi_agent_result) = process_multi_agent_commands(
+                &content_after_delegate,
+                &self.db,
+                &self.client,
+                &self.model,
+            )
+            .await;
+            let (content_after_task, task_result) = process_task_commands(&content_after_multi);
+            let (display_content, grep_result) = process_grep_commands(&content_after_task);
 
             println!("{}", display_content);
 
@@ -415,13 +443,23 @@ impl ChatSession {
                 println!("{}\n", result);
             }
 
+            if let Some(ref result) = task_result {
+                print_colored("\n[TASK] ", Color::Cyan)?;
+                println!("{}\n", result);
+            }
+
             if let Some(ref result) = grep_result {
                 print_colored("\n[GREP] ", Color::Green)?;
                 println!("{}\n", result);
             }
 
-            if stats_result.is_none() && cron_result.is_none() && delegate_result.is_none()
-                && multi_agent_result.is_none() && grep_result.is_none() {
+            if stats_result.is_none()
+                && cron_result.is_none()
+                && delegate_result.is_none()
+                && multi_agent_result.is_none()
+                && grep_result.is_none()
+                && task_result.is_none()
+            {
                 println!();
             }
 
@@ -459,16 +497,28 @@ impl ChatSession {
     ///
     /// Returns error if API call or database operations fail
     pub async fn send_message(&self, message: &str) -> Result<String> {
-        let system_prompt = load_agent_configs()
-            .unwrap_or_else(|e| {
-                eprintln!("Warning: Failed to load agent configs: {}. Using fallback.", e);
-                build_fallback_prompt()
-            });
+        let system_prompt = load_agent_configs().unwrap_or_else(|e| {
+            eprintln!(
+                "Warning: Failed to load agent configs: {}. Using fallback.",
+                e
+            );
+            build_fallback_prompt()
+        });
 
-        let mut messages = vec![
-            Message::system(&system_prompt),
-            Message::user(message),
-        ];
+        let mut messages = vec![Message::system(&system_prompt)];
+
+        // Load recent history to provide context
+        if let Ok(history) = self.db.get_recent_chat_history(10).await {
+            for msg in history {
+                if msg.role == "user" {
+                    messages.push(Message::user(&msg.content));
+                } else if msg.role == "assistant" {
+                    messages.push(Message::assistant(&msg.content));
+                }
+            }
+        }
+
+        messages.push(Message::user(message));
 
         // Save user message
         self.db
@@ -488,8 +538,10 @@ impl ChatSession {
             process_stats_commands(&assistant_message.content, &self.db).await;
         let (content_after_cron, cron_result) = process_cron_commands(&content_after_stats);
         let (content_after_delegate, delegate_result) =
-            process_delegate_commands(&content_after_cron, &self.db, &self.client, &self.model).await;
-        let (cleaned_content, grep_result) = process_grep_commands(&content_after_delegate);
+            process_delegate_commands(&content_after_cron, &self.db, &self.client, &self.model)
+                .await;
+        let (content_after_task, task_result) = process_task_commands(&content_after_delegate);
+        let (cleaned_content, grep_result) = process_grep_commands(&content_after_task);
 
         // Build full response with stats, cron, delegation, and grep results
         let mut full_response = cleaned_content;
@@ -501,6 +553,9 @@ impl ChatSession {
         }
         if let Some(result) = delegate_result {
             full_response.push_str(&format!("\n\n[DELEGATE] {}", result));
+        }
+        if let Some(result) = task_result {
+            full_response.push_str(&format!("\n\n[TASK] {}", result));
         }
         if let Some(result) = grep_result {
             full_response.push_str(&format!("\n\n[GREP] {}", result));
@@ -727,14 +782,26 @@ async fn process_stats_commands(content: &str, db: &Database) -> (String, Option
             Ok((current, target, percentage, achieved)) => {
                 if target > 0 {
                     let mut output = "=== Daily Water Goal Progress ===\n\n".to_string();
-                    output.push_str(&format!("Target: {} ml ({:.1} L)\n", target, target as f64 / 1000.0));
-                    output.push_str(&format!("Current: {} ml ({:.1} L)\n", current, current as f64 / 1000.0));
+                    output.push_str(&format!(
+                        "Target: {} ml ({:.1} L)\n",
+                        target,
+                        target as f64 / 1000.0
+                    ));
+                    output.push_str(&format!(
+                        "Current: {} ml ({:.1} L)\n",
+                        current,
+                        current as f64 / 1000.0
+                    ));
                     output.push_str(&format!("Progress: {:.1}%\n", percentage));
                     if achieved {
                         output.push_str("Status: Goal achieved!\n");
                     } else {
                         let remaining = target - current;
-                        output.push_str(&format!("Remaining: {} ml ({:.1} L)\n", remaining, remaining as f64 / 1000.0));
+                        output.push_str(&format!(
+                            "Remaining: {} ml ({:.1} L)\n",
+                            remaining,
+                            remaining as f64 / 1000.0
+                        ));
                     }
                     output
                 } else {
@@ -811,16 +878,170 @@ fn process_cron_commands(content: &str) -> (String, Option<String>) {
                         Err(e) => format!("Error installing cron job: {}", e),
                     }
                 }
-                Err(e) => format!("Error: {}", e),
+                Err(e) => format!("Error checking status: {}", e),
             };
-
             result_message = Some(result);
             cleaned = cleaned.replace(command, "");
         }
     }
 
-    // Clean up any extra whitespace
-    cleaned = cleaned.trim().to_string();
+    (cleaned, result_message)
+}
+
+/// Helper to find closing bracket handling nesting
+fn find_closing_bracket(s: &str) -> Option<usize> {
+    let mut depth = 0;
+    for (i, c) in s.char_indices() {
+        match c {
+            '[' => depth += 1,
+            ']' => {
+                if depth == 0 {
+                    return Some(i);
+                }
+                depth -= 1;
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Process task commands in AI response.
+fn process_task_commands(content: &str) -> (String, Option<String>) {
+    let task_manager = TaskManager::new();
+    let mut result_message = None;
+    let mut cleaned = content.to_string();
+
+    // Check for TASK:CREATE
+    if let Some(start) = cleaned.find("[TASK:CREATE:") {
+        let content_start = start + "[TASK:CREATE:".len();
+        if let Some(end_offset) = find_closing_bracket(&cleaned[content_start..]) {
+            let end = content_start + end_offset;
+            let command = &cleaned[start..=end];
+            let params = &cleaned[content_start..end];
+
+            let parts: Vec<&str> = params.split('|').collect();
+            if !parts.is_empty() {
+                let title = parts[0];
+                let priority = if parts.len() > 1 { parts[1] } else { "medium" };
+                let due_date = if parts.len() > 2 {
+                    Some(parts[2])
+                } else {
+                    None
+                };
+
+                match task_manager.create_task(title, priority, due_date) {
+                    Ok(task) => {
+                        result_message = Some(format!("Task created: #{} {}", task.id, task.title));
+                    }
+                    Err(e) => {
+                        result_message = Some(format!("Error creating task: {}", e));
+                    }
+                }
+                cleaned = cleaned.replace(command, "");
+            }
+        }
+    }
+
+    // Check for TASK:LIST
+    if let Some(start) = cleaned.find("[TASK:LIST:") {
+        let content_start = start + "[TASK:LIST:".len();
+        if let Some(end_offset) = find_closing_bracket(&cleaned[content_start..]) {
+            let end = content_start + end_offset;
+            let command = &cleaned[start..=end];
+            let filter = &cleaned[content_start..end];
+
+            match task_manager.list_tasks(filter) {
+                Ok(tasks) => {
+                    let mut output = format!("=== Tasks ({}) ===\n", filter);
+                    if tasks.is_empty() {
+                        output.push_str("No tasks found.");
+                    } else {
+                        for t in tasks {
+                            output.push_str(&format!("#{} {} - {}", t.id, t.title, t.priority));
+                            if let Some(d) = &t.due_date {
+                                output.push_str(&format!(" (due: {})", d));
+                            }
+                            if t.completed {
+                                output.push_str(" [DONE]");
+                            }
+                            output.push('\n');
+                        }
+                    }
+                    result_message = Some(output);
+                }
+                Err(e) => result_message = Some(format!("Error listing tasks: {}", e)),
+            }
+            cleaned = cleaned.replace(command, "");
+        }
+    }
+
+    // Check for TASK:COMPLETE
+    if let Some(start) = cleaned.find("[TASK:COMPLETE:") {
+        let content_start = start + "[TASK:COMPLETE:".len();
+        if let Some(end_offset) = find_closing_bracket(&cleaned[content_start..]) {
+            let end = content_start + end_offset;
+            let command = &cleaned[start..=end];
+            let id_str = &cleaned[content_start..end];
+
+            if let Ok(id) = id_str.parse::<usize>() {
+                match task_manager.complete_task(id) {
+                    Ok(Some(task)) => {
+                        result_message = Some(format!("Task completed: {}", task.title))
+                    }
+                    Ok(None) => result_message = Some(format!("Task #{} not found", id)),
+                    Err(e) => result_message = Some(format!("Error completing task: {}", e)),
+                }
+                cleaned = cleaned.replace(command, "");
+            }
+        }
+    }
+
+    // Check for TASK:DELETE
+    if let Some(start) = cleaned.find("[TASK:DELETE:") {
+        let content_start = start + "[TASK:DELETE:".len();
+        if let Some(end_offset) = find_closing_bracket(&cleaned[content_start..]) {
+            let end = content_start + end_offset;
+            let command = &cleaned[start..=end];
+            let id_str = &cleaned[content_start..end];
+
+            if let Ok(id) = id_str.parse::<usize>() {
+                match task_manager.delete_task(id) {
+                    Ok(true) => result_message = Some(format!("Task #{} deleted", id)),
+                    Ok(false) => result_message = Some(format!("Task #{} not found", id)),
+                    Err(e) => result_message = Some(format!("Error deleting task: {}", e)),
+                }
+                cleaned = cleaned.replace(command, "");
+            }
+        }
+    }
+
+    // Check for TASK:UPDATE
+    if let Some(start) = cleaned.find("[TASK:UPDATE:") {
+        let content_start = start + "[TASK:UPDATE:".len();
+        if let Some(end_offset) = find_closing_bracket(&cleaned[content_start..]) {
+            let end = content_start + end_offset;
+            let command = &cleaned[start..=end];
+            let params = &cleaned[content_start..end];
+
+            let parts: Vec<&str> = params.split('|').collect();
+            if parts.len() >= 3 {
+                if let Ok(id) = parts[0].parse::<usize>() {
+                    let field = parts[1];
+                    let value = parts[2];
+                    match task_manager.update_task(id, field, value) {
+                        Ok(Some(task)) => {
+                            result_message =
+                                Some(format!("Task updated: #{} {}", task.id, task.title))
+                        }
+                        Ok(None) => result_message = Some(format!("Task #{} not found", id)),
+                        Err(e) => result_message = Some(format!("Error updating task: {}", e)),
+                    }
+                    cleaned = cleaned.replace(command, "");
+                }
+            }
+        }
+    }
 
     (cleaned, result_message)
 }
@@ -963,7 +1184,8 @@ async fn process_multi_agent_commands(
                     let mut responses = Vec::new();
 
                     for agent_name in agent_names {
-                        let response = delegate_to_agent(agent_name, request, db, client, model).await;
+                        let response =
+                            delegate_to_agent(agent_name, request, db, client, model).await;
 
                         // Get agent emoji/icon
                         let agent_icon = match agent_name {
@@ -1057,10 +1279,9 @@ fn process_grep_commands(content: &str) -> (String, Option<String>) {
                     ));
                 } else if parts.len() == 3 {
                     // Read with line range
-                    if let (Ok(start_line), Ok(end_line)) = (
-                        parts[1].parse::<usize>(),
-                        parts[2].parse::<usize>(),
-                    ) {
+                    if let (Ok(start_line), Ok(end_line)) =
+                        (parts[1].parse::<usize>(), parts[2].parse::<usize>())
+                    {
                         let result = read_file_lines(file_path, Some((start_line, end_line)));
                         result_message = Some(result);
                     } else {
@@ -1134,7 +1355,8 @@ fn execute_ripgrep_search(pattern: &str, search_path: &str) -> String {
         }
         Err(_) => {
             // Fallback message if ripgrep not available
-            "Error: ripgrep (rg) is not installed. Please install it to use search functionality.".to_string()
+            "Error: ripgrep (rg) is not installed. Please install it to use search functionality."
+                .to_string()
         }
     }
 }
@@ -1200,7 +1422,9 @@ fn read_file_lines(file_path: &str, line_range: Option<(usize, usize)>) -> Strin
                 if total_lines > max_lines {
                     format!(
                         "=== {} (showing first {} of {} lines) ===\n\n{}\n\n... (file truncated)",
-                        display_path.display(), max_lines, total_lines,
+                        display_path.display(),
+                        max_lines,
+                        total_lines,
                         display_lines.join("\n")
                     )
                 } else {
@@ -1235,13 +1459,15 @@ async fn delegate_to_agent(
     };
 
     // Build personality-aware agent prompt
-    let agent_prompt = if let Some(profile) = PersonalityProfile::get_profile(&agent.personality_type) {
+    let agent_prompt = if let Some(profile) =
+        PersonalityProfile::get_profile(&agent.personality_type)
+    {
         // Use detailed personality profile
         let mut prompt = profile.build_agent_prompt(
             &agent.name,
             &agent.title,
             agent.backstory.as_deref().unwrap_or(""),
-            &agent.current_mood
+            &agent.current_mood,
         );
 
         prompt.push_str(&format!(
@@ -1256,11 +1482,7 @@ async fn delegate_to_agent(
         prompt
     } else {
         // Fallback to basic prompt if personality profile not found
-        let mut prompt = format!(
-            "You are {}, {}.\n\n",
-            agent.name,
-            agent.title
-        );
+        let mut prompt = format!("You are {}, {}.\n\n", agent.name, agent.title);
 
         if let Some(backstory) = &agent.backstory {
             prompt.push_str(&format!("Background: {}\n\n", backstory));

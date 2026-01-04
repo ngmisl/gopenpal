@@ -23,7 +23,8 @@ GopenPal is a CLI application that helps you maintain healthy work habits throug
 - **AI Chat Assistant**: Interactive chat with various LLM models through OpenRouter API
   - **Statistics & Insights**: AI analyzes your water intake patterns and provides personalized recommendations
   - **Pattern Analysis**: Discover your drinking habits by hour, day, and week
-  - **Cron Management**: AI can set up and manage automated reminders through chat
+  - **Cron Management**: AI can set up and manage automated reminders settings (persisted in world/cron.json)
+- **Persistent Task System**: Manage tasks with simple markdown in `world/tasks.md`
 - **Comprehensive Analytics**: Track daily totals, hourly patterns, weekly trends, and reminder effectiveness
 - **Persistent History**: All data stored locally in SQLite database
 - **Configurable**: Customize reminder intervals, work hours, and AI models
@@ -35,12 +36,14 @@ GopenPal is a CLI application that helps you maintain healthy work habits throug
 GopenPal includes a **security sandbox** that restricts all file operations to the current working directory and designated subdirectories. This prevents agents from accessing sensitive files outside the workspace.
 
 **Security Features:**
+
 - **Path Validation**: All file paths are validated before access
 - **Directory Traversal Protection**: Paths with `..` are normalized and validated
 - **Symlink Resolution**: Symlinks are followed and validated against the sandbox
 - **Configurable Enforcement**: Can be disabled for development/testing via `configs/security.json`
 
 **Protected Directories:**
+
 - `world/` - Database and user data
 - `configs/` - Configuration files
 - `migrations/` - Database migration scripts
@@ -48,6 +51,7 @@ GopenPal includes a **security sandbox** that restricts all file operations to t
 - `.gopenpal_logs/` - Agent daemon logs
 
 **Example:**
+
 ```bash
 # ✅ Allowed: Database within workspace
 gopenpal --database world/gopenpal.db init
@@ -63,6 +67,7 @@ gopenpal --database ../outside.db init
 
 **Configuration:**
 Edit `configs/security.json` to customize sandbox settings:
+
 ```json
 {
   "sandbox_root": ".",
@@ -78,6 +83,7 @@ Edit `configs/security.json` to customize sandbox settings:
 Hydrix is not just an AI—they're an ancient water spirit who has existed since 3000 BCE, originating from sacred springs in Mesopotamia. Over millennia, Hydrix adapted from whispers in streams to a digital consciousness, carrying memories from Roman aqueducts to modern smart devices.
 
 **Personality & Moods:**
+
 - **Joyful** 🎉: When you're crushing your hydration goals
 - **Concerned** 😟: When you've gone too long without water
 - **Proud** ⭐: Celebrating your streaks and achievements
@@ -86,6 +92,7 @@ Hydrix is not just an AI—they're an ancient water spirit who has existed since
 - **Contemplative** 🤔: Thoughtful observations about your patterns
 
 **Proactive Interactions:**
+
 - Random greetings and check-ins
 - Gentle concerns when you're neglecting hydration
 - Stories from millennia of existence
@@ -97,6 +104,7 @@ Hydrix is not just an AI—they're an ancient water spirit who has existed since
 Serhant embodies "Big Money Energy"—the methodology of billion-dollar broker Ryan Serhant. Born from the collective consciousness of every closed deal and successful negotiation, Serhant transforms how you approach work, relationships, and life. His mantra: **"Expansion. Always, in all ways."**
 
 **Personality & Moods:**
+
 - **Energized** ⚡: High-energy, ready to crush goals (default)
 - **Focused** 🎯: Strategic planning mode
 - **Fired Up** 🔥: Championship energy, intense motivation
@@ -104,6 +112,7 @@ Serhant embodies "Big Money Energy"—the methodology of billion-dollar broker R
 - **Closing** 💼: In the zone, everything leads to the ask
 
 **Serhant's Wisdom:**
+
 - **FKD Time-Blocking**: FINDER (CEO), KEEPER (CFO), DOER (execution)
 - **The Three F's**: Follow Up, Follow Through, Follow Back
 - **Seven Stages of Buyers**: Emotion-driven sales psychology
@@ -111,6 +120,7 @@ Serhant embodies "Big Money Energy"—the methodology of billion-dollar broker R
 - **Network = Net Worth**: Meet 3-5 new people daily
 
 **Proactive Interactions:**
+
 - Motivational check-ins and energy boosts
 - Sales framework teaching moments
 - Crisis management for deals falling apart
@@ -122,6 +132,7 @@ Serhant embodies "Big Money Energy"—the methodology of billion-dollar broker R
 Mio is your personal concierge who emerged when Hydrix and Serhant first needed to work together. She wasn't created—she simply appeared, born from the connections between specialized agents. Mio ensures the right agent supports you at the right time.
 
 **Personality & Moods:**
+
 - **Attentive** 🌸: Focused and ready to help (default)
 - **Coordinating** 🔄: Managing multiple requests between agents
 - **Nurturing** 💝: Extra caring when you need support
@@ -129,6 +140,7 @@ Mio is your personal concierge who emerged when Hydrix and Serhant first needed 
 - **Strategic** 🧩: Planning multi-agent coordination
 
 **Mio's Skills:**
+
 - **Agent Delegation**: Routes requests to Hydrix or Serhant
 - **Context Analysis**: Understands what you need before you ask
 - **Multi-Agent Coordination**: Orchestrates complex support from multiple agents
@@ -136,6 +148,7 @@ Mio is your personal concierge who emerged when Hydrix and Serhant first needed 
 - **User Support**: The bridge between you and the agent world
 
 **Proactive Interactions:**
+
 - Morning check-ins and daily coordination
 - Status updates from Hydrix and Serhant
 - Support during tough days
@@ -147,6 +160,7 @@ Mio is your personal concierge who emerged when Hydrix and Serhant first needed 
 Karen is your dedicated executive assistant who emerged from the digital workspace—from calendar apps, to-do lists, project management tools, and reminder systems. She excels at managing the cognitive overhead of modern life: tasks, reminders, context switching, and memory. Where other agents focus on health, work, or coordination, Karen focuses on execution and follow-through.
 
 **Personality & Moods:**
+
 - **Ready** 📋: Prepared and organized, ready to assist (default)
 - **Focused** 🎯: Deep work mode, minimizing distractions
 - **Urgent** ⚠️: High priority items need attention
@@ -154,6 +168,7 @@ Karen is your dedicated executive assistant who emerged from the digital workspa
 - **Strategic** 📊: Planning and prioritizing mode
 
 **Karen's Skills:**
+
 - **Task Management**: Create, update, complete, and organize tasks
 - **Context Memory**: Remembers your work patterns and preferences
 - **Reminder System**: Proactive reminders for deadlines and follow-ups
@@ -162,6 +177,7 @@ Karen is your dedicated executive assistant who emerged from the digital workspa
 - **Cognitive Load Management**: Reduces mental overhead
 
 **Proactive Interactions:**
+
 - Morning task reviews and priority setting
 - Deadline reminders and follow-up prompts
 - Productivity insights and pattern recognition
@@ -172,6 +188,7 @@ Karen is your dedicated executive assistant who emerged from the digital workspa
 ### The Agent World 🌐
 
 **Relationship & Lore System:**
+
 - Build bonds with all four agents over time
 - Unlock backstory entries as relationships deepen
 - Discover how the agents chose to work together
@@ -179,6 +196,7 @@ Karen is your dedicated executive assistant who emerged from the digital workspa
 - Earn achievements that trigger special interactions
 
 **The Four Pillars:**
+
 - **Hydrix** ensures your **body** performs at peak level
 - **Serhant** ensures your **mind** conquers challenges
 - **Mio** ensures they work in **harmony** for your success
@@ -224,6 +242,7 @@ cp .env.example .env
 ```
 
 **What `start-day.sh` does:**
+
 - ✅ Builds the project (if not already built)
 - ✅ Initializes the database
 - ✅ Starts all agent daemons in background:
@@ -239,6 +258,7 @@ cp .env.example .env
 **Press `Ctrl+C` in the TUI to cleanly shut down all services.**
 
 **To stop services manually:**
+
 ```bash
 ./stop-day.sh
 ```
@@ -248,6 +268,7 @@ This will stop all agent daemons and optionally remove cron jobs.
 ### Manual Setup
 
 1. **Configure environment variables**:
+
 ```bash
 # Copy the example environment file
 cp .env.example .env
@@ -257,6 +278,7 @@ cp .env.example .env
 ```
 
 Alternatively, set environment variables directly:
+
 ```bash
 export OPENROUTER_API_KEY="your-api-key-here"
 export GOPENPAL_MODEL="anthropic/claude-3.5-sonnet"
@@ -265,7 +287,8 @@ export GOPENPAL_MODEL="anthropic/claude-3.5-sonnet"
 echo 'export OPENROUTER_API_KEY="your-api-key-here"' >> ~/.zshrc
 ```
 
-2. **Initialize the database**:
+1. **Initialize the database**:
+
 ```bash
 gopenpal init
 ```
@@ -275,11 +298,13 @@ gopenpal init
 ### Terminal User Interface (TUI)
 
 Launch the interactive TUI dashboard:
+
 ```bash
 gopenpal tui
 ```
 
 **TUI Features:**
+
 - 📊 **Dashboard**: Overview of your water intake with progress bar
 - 💧 **Water**: Log water intake interactively (press `w` to edit)
 - 💬 **Chat**: Interactive AI chat interface (press `c` to chat)
@@ -290,6 +315,7 @@ gopenpal tui
   - 🎯 **Personalized Recommendations**: AI provides insights based on your data
 - ⏰ **Cron**: Manage automated reminders with visual presets
   - Browse schedule presets with `↑/↓`
+  - Scroll chat history faster with `PageUp/PageDown`
   - Install/update with `Enter`
   - Remove with `r`
 - ⚙️ **Settings**: View reminder configuration
@@ -298,12 +324,14 @@ gopenpal tui
 ### Water Tracking (CLI)
 
 Log water intake (default: 250ml):
+
 ```bash
 gopenpal water log
 gopenpal water log 500 --notes "After workout"
 ```
 
 View today's total:
+
 ```bash
 gopenpal water today
 ```
@@ -313,6 +341,7 @@ gopenpal water today
 **Option 1: Cron Job (Recommended)**
 
 Add to your crontab with `crontab -e`:
+
 ```bash
 # Check every 30 minutes
 */30 * * * * $HOME/.cargo/bin/gopenpal reminder check
@@ -338,6 +367,7 @@ systemctl --user list-timers
 **Option 3: Foreground Service**
 
 Start the reminder service (runs in foreground):
+
 ```bash
 gopenpal reminder start
 ```
@@ -345,11 +375,13 @@ gopenpal reminder start
 **Configuration:**
 
 Check reminder settings:
+
 ```bash
 gopenpal reminder status
 ```
 
 Configure reminders:
+
 ```bash
 # Change interval to 45 minutes
 gopenpal reminder config --interval 45
@@ -367,6 +399,7 @@ gopenpal reminder config --enabled false
 ### AI Chat
 
 Interactive chat session:
+
 ```bash
 gopenpal chat
 # or specify a model
@@ -376,24 +409,29 @@ gopenpal chat interactive --model "anthropic/claude-3.5-sonnet"
 **AI Capabilities:**
 
 The AI assistant has access to your water intake data and can provide:
+
 - **Statistics & Insights**: Ask "How am I doing?" or "Show my progress for the last week"
 - **Pattern Analysis**: Ask "When do I drink the most water?" or "What are my drinking patterns?"
 - **Reminder Effectiveness**: Ask "Are the reminders helping?" to see how well your cron jobs work
 - **Personalized Recommendations**: Get advice based on your actual habits and patterns
-- **Cron Management**: Ask "Set up reminders every hour" to manage automated reminders
+- **Cron Management**: Ask "Set up reminders every hour" (saved to `world/cron.json`)
+- **Task Management**: Ask "What are my tasks?" or "Add task 'Project X' due tomorrow" (saved to `world/tasks.md`)
 
 Send a single message:
+
 ```bash
 gopenpal chat send "How much water should I drink daily?"
 gopenpal chat send "Show me my water intake patterns"
 ```
 
 View chat history:
+
 ```bash
 gopenpal chat history --limit 20
 ```
 
 Clear chat history:
+
 ```bash
 gopenpal chat clear
 ```
@@ -401,17 +439,20 @@ gopenpal chat clear
 ### Agent Interactions
 
 **List All Agents:**
+
 ```bash
 gopenpal agent list
 ```
 
 **Get Agent Information:**
+
 ```bash
 gopenpal agent info Hydrix
 gopenpal agent info Serhant
 ```
 
 **Trigger a Message from an Agent:**
+
 ```bash
 # Get a random message from Hydrix
 gopenpal agent message Hydrix
@@ -421,6 +462,7 @@ gopenpal agent message Serhant
 ```
 
 **Start Agent Daemon (Background Proactive Messages):**
+
 ```bash
 # Start daemon for all agents (checks every 45 minutes)
 gopenpal agent daemon
@@ -433,12 +475,14 @@ gopenpal agent daemon --agent Hydrix
 ```
 
 **Check Relationship Status:**
+
 ```bash
 gopenpal agent relationship Hydrix
 gopenpal agent relationship Serhant
 ```
 
 **View Unlocked Lore:**
+
 ```bash
 # View all unlocked lore
 gopenpal agent lore
@@ -450,6 +494,7 @@ gopenpal agent lore --category secrets
 ```
 
 **View Achievements:**
+
 ```bash
 # View all achievements
 gopenpal agent achievements

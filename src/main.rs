@@ -14,6 +14,7 @@ mod openrouter;
 mod personality;
 mod reminder;
 mod security;
+mod tasks;
 mod tui;
 mod utils;
 
@@ -26,7 +27,9 @@ use tracing_subscriber::EnvFilter;
 use agent_daemon::{AgentDaemon, AgentDaemonConfig};
 use agents::AgentSystem;
 use chat::ChatSession;
-use cli::{AgentCommands, ChatCommands, Cli, Commands, GoalCommands, ReminderCommands, WaterCommands};
+use cli::{
+    AgentCommands, ChatCommands, Cli, Commands, GoalCommands, ReminderCommands, WaterCommands,
+};
 use db::Database;
 use openrouter::OpenRouterClient;
 use reminder::ReminderService;
@@ -57,6 +60,12 @@ async fn run() -> anyhow::Result<()> {
         .init();
 
     info!("Starting GopenPal");
+
+    // Sync cron jobs from persistent storage
+    let cron_manager = crate::cron::CronManager::new(None);
+    if let Err(e) = cron_manager.sync() {
+        error!("Failed to sync cron jobs: {}", e);
+    }
 
     // Load security configuration
     let security_config = SecurityConfig::load_from_file("configs/security.json")
@@ -271,12 +280,12 @@ async fn handle_reminder_command(db: &Database, action: ReminderCommands) -> any
                 settings.interval_minutes = i;
             }
             if let Some(s) = start {
-                settings.work_hours_start = utils::parse_time(&s)
-                    .context("Invalid time format, use HH:MM")?;
+                settings.work_hours_start =
+                    utils::parse_time(&s).context("Invalid time format, use HH:MM")?;
             }
             if let Some(e) = end {
-                settings.work_hours_end = utils::parse_time(&e)
-                    .context("Invalid time format, use HH:MM")?;
+                settings.work_hours_end =
+                    utils::parse_time(&e).context("Invalid time format, use HH:MM")?;
             }
             if let Some(d) = days {
                 settings.work_days = d;
@@ -359,8 +368,10 @@ async fn handle_agent_command(db: &Database, action: AgentCommands) -> anyhow::R
             // Show Hydrix
             if let Some(hydrix) = agent_system.get_agent("Hydrix").await? {
                 println!("🌊 {} - {}", hydrix.name, hydrix.title);
-                println!("   Mood: {} | Relationship: Level {}",
-                    hydrix.current_mood, hydrix.relationship_level);
+                println!(
+                    "   Mood: {} | Relationship: Level {}",
+                    hydrix.current_mood, hydrix.relationship_level
+                );
                 if let Some(backstory) = &hydrix.backstory {
                     let preview = backstory.chars().take(100).collect::<String>();
                     println!("   {}...\n", preview);
@@ -370,8 +381,10 @@ async fn handle_agent_command(db: &Database, action: AgentCommands) -> anyhow::R
             // Show Serhant
             if let Some(serhant) = agent_system.get_agent("Serhant").await? {
                 println!("⚡ {} - {}", serhant.name, serhant.title);
-                println!("   Mood: {} | Relationship: Level {}",
-                    serhant.current_mood, serhant.relationship_level);
+                println!(
+                    "   Mood: {} | Relationship: Level {}",
+                    serhant.current_mood, serhant.relationship_level
+                );
                 if let Some(backstory) = &serhant.backstory {
                     let preview = backstory.chars().take(100).collect::<String>();
                     println!("   {}...\n", preview);
@@ -380,7 +393,9 @@ async fn handle_agent_command(db: &Database, action: AgentCommands) -> anyhow::R
         }
 
         AgentCommands::Info { agent } => {
-            let agent_data = agent_system.get_agent(&agent).await?
+            let agent_data = agent_system
+                .get_agent(&agent)
+                .await?
                 .context(format!("Agent '{}' not found", agent))?;
 
             let icon = if agent == "Hydrix" { "🌊" } else { "⚡" };
@@ -390,7 +405,10 @@ async fn handle_agent_command(db: &Database, action: AgentCommands) -> anyhow::R
             println!("Relationship Level: {}", agent_data.relationship_level);
 
             if let Some(last_interaction) = agent_data.last_interaction {
-                println!("Last Interaction: {}", last_interaction.format("%Y-%m-%d %H:%M"));
+                println!(
+                    "Last Interaction: {}",
+                    last_interaction.format("%Y-%m-%d %H:%M")
+                );
             }
 
             if let Some(backstory) = agent_data.backstory {
@@ -431,7 +449,9 @@ async fn handle_agent_command(db: &Database, action: AgentCommands) -> anyhow::R
         }
 
         AgentCommands::Relationship { agent } => {
-            let agent_data = agent_system.get_agent(&agent).await?
+            let agent_data = agent_system
+                .get_agent(&agent)
+                .await?
                 .context(format!("Agent '{}' not found", agent))?;
 
             println!("\n{} Relationship Status\n", agent);
@@ -439,12 +459,16 @@ async fn handle_agent_command(db: &Database, action: AgentCommands) -> anyhow::R
             println!("Current Mood: {}", agent_data.current_mood);
 
             if let Some(last_interaction) = agent_data.last_interaction {
-                println!("Last Interaction: {}", last_interaction.format("%Y-%m-%d %H:%M"));
+                println!(
+                    "Last Interaction: {}",
+                    last_interaction.format("%Y-%m-%d %H:%M")
+                );
             }
 
             // Show what lore is unlocked at this level
             let lore = agent_system.get_unlocked_lore().await?;
-            let agent_lore: Vec<_> = lore.iter()
+            let agent_lore: Vec<_> = lore
+                .iter()
                 .filter(|l| l.title.contains(&agent) || l.category.contains("world_building"))
                 .collect();
 
@@ -492,9 +516,7 @@ async fn handle_agent_command(db: &Database, action: AgentCommands) -> anyhow::R
                 "SELECT * FROM achievements ORDER BY unlocked DESC, achievement_name"
             };
 
-            let achievements = sqlx::query(query)
-                .fetch_all(db.pool())
-                .await?;
+            let achievements = sqlx::query(query).fetch_all(db.pool()).await?;
 
             if achievements.is_empty() {
                 println!("No achievements yet!");
@@ -515,7 +537,9 @@ async fn handle_agent_command(db: &Database, action: AgentCommands) -> anyhow::R
                 }
 
                 if is_unlocked {
-                    if let Ok(unlocked_at) = ach.try_get::<chrono::DateTime<chrono::Utc>, _>("unlocked_at") {
+                    if let Ok(unlocked_at) =
+                        ach.try_get::<chrono::DateTime<chrono::Utc>, _>("unlocked_at")
+                    {
                         println!("   Unlocked: {}", unlocked_at.format("%Y-%m-%d"));
                     }
                 }
@@ -532,7 +556,11 @@ async fn handle_goal_command(db: &Database, action: GoalCommands) -> anyhow::Res
     match action {
         GoalCommands::Set { amount, notes } => {
             db.set_daily_water_goal(amount, notes.as_deref()).await?;
-            println!("Daily water goal set to {} ml ({:.1} L)", amount, amount as f64 / 1000.0);
+            println!(
+                "Daily water goal set to {} ml ({:.1} L)",
+                amount,
+                amount as f64 / 1000.0
+            );
 
             // Show current progress
             let (current, target, percentage, achieved) = db.get_today_goal_progress().await?;
@@ -553,7 +581,11 @@ async fn handle_goal_command(db: &Database, action: GoalCommands) -> anyhow::Res
 
             if let Some(g) = goal {
                 println!("Current Daily Water Goal:");
-                println!("  Target: {} ml ({:.1} L)", g.target_value as i64, g.target_value / 1000.0);
+                println!(
+                    "  Target: {} ml ({:.1} L)",
+                    g.target_value as i64,
+                    g.target_value / 1000.0
+                );
                 if let Some(notes) = &g.notes {
                     println!("  Notes: {}", notes);
                 }
@@ -561,7 +593,11 @@ async fn handle_goal_command(db: &Database, action: GoalCommands) -> anyhow::Res
 
                 println!("\nToday's Progress:");
                 let (current, target, percentage, achieved) = db.get_today_goal_progress().await?;
-                println!("  Current: {} ml ({:.1} L)", current, current as f64 / 1000.0);
+                println!(
+                    "  Current: {} ml ({:.1} L)",
+                    current,
+                    current as f64 / 1000.0
+                );
                 println!("  Progress: {:.1}%", percentage);
 
                 // Visual progress bar
@@ -574,7 +610,11 @@ async fn handle_goal_command(db: &Database, action: GoalCommands) -> anyhow::Res
                     println!("  Status: Goal achieved! Keep up the great work!");
                 } else {
                     let remaining = target - current;
-                    println!("  Remaining: {} ml ({:.1} L)", remaining, remaining as f64 / 1000.0);
+                    println!(
+                        "  Remaining: {} ml ({:.1} L)",
+                        remaining,
+                        remaining as f64 / 1000.0
+                    );
                 }
             } else {
                 println!("No active daily water goal set.");
@@ -595,7 +635,10 @@ async fn handle_goal_command(db: &Database, action: GoalCommands) -> anyhow::Res
             }
 
             println!("Goal Progress History (last {} days):\n", days);
-            println!("{:<12} {:<10} {:<10} {:<10} {:<8}", "Date", "Actual", "Target", "Progress", "Status");
+            println!(
+                "{:<12} {:<10} {:<10} {:<10} {:<8}",
+                "Date", "Actual", "Target", "Progress", "Status"
+            );
             println!("{}", "-".repeat(60));
 
             for p in &progress {
