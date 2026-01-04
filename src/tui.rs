@@ -18,6 +18,7 @@ use ratatui::{
     Frame, Terminal,
 };
 use std::io;
+use tokio::sync::mpsc;
 use tracing::info;
 
 use crate::agents::{Agent, AgentSystem};
@@ -55,7 +56,7 @@ struct App {
     settings: Option<ReminderSettings>,
     /// Cached agents
     agents: Vec<Agent>,
-    /// Current response being generated (for loading indicator)
+    /// Current streaming response being built
     current_response: String,
     /// Whether a request is in progress
     is_loading: bool,
@@ -131,9 +132,10 @@ pub async fn run_tui(db: Database, api_key: Option<String>) -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     let mut app = App::default();
+    let (tx, mut rx) = mpsc::channel::<String>(100);
 
     // Run the app
-    let result = run_app(&mut terminal, &mut app, &db, api_key).await;
+    let result = run_app(&mut terminal, &mut app, &db, api_key, tx, &mut rx).await;
 
     // Restore terminal
     disable_raw_mode()?;
@@ -153,6 +155,8 @@ async fn run_app(
     app: &mut App,
     db: &Database,
     api_key: Option<String>,
+    tx: mpsc::Sender<String>,
+    rx: &mut mpsc::Receiver<String>,
 ) -> Result<()> {
     loop {
         // Update data asynchronously before rendering
@@ -160,6 +164,23 @@ async fn run_app(
         app.update_data(db).await;
 
         terminal.draw(|f| ui(f, app))?;
+
+        // Handle streaming chat responses
+        while let Ok(chunk) = rx.try_recv() {
+            if chunk.is_empty() {
+                // Empty chunk signals completion
+                // Move completed response to chat_messages
+                if !app.current_response.is_empty() {
+                    app.chat_messages
+                        .push(format!("Assistant: {}", app.current_response));
+                    app.current_response.clear();
+                }
+                app.is_loading = false;
+            } else {
+                // Append streaming chunk
+                app.current_response.push_str(&chunk);
+            }
+        }
 
         // Poll for events with timeout
         if event::poll(std::time::Duration::from_millis(100))? {
@@ -269,33 +290,34 @@ async fn run_app(
                                 app.chat_messages.push(format!("You: {}", input));
                                 app.chat_input.clear();
 
-                                // Send chat message and await full response
+                                // Start streaming
+                                app.is_loading = true;
+                                app.current_response.clear();
+
                                 let api_key_clone = api_key.clone().unwrap();
                                 let db_clone = db.clone();
+                                let tx_clone = tx.clone();
 
-                                app.is_loading = true;
-                                app.current_response = String::new();
+                                tokio::spawn(async move {
+                                    let client = OpenRouterClient::new(api_key_clone);
+                                    let session = ChatSession::new(
+                                        db_clone,
+                                        client,
+                                        "anthropic/claude-3.5-sonnet".to_string(),
+                                    );
 
-                                let client = OpenRouterClient::new(api_key_clone);
-                                let session = ChatSession::new(
-                                    db_clone,
-                                    client,
-                                    "anthropic/claude-3.5-sonnet".to_string(),
-                                );
-
-                                match session.send_message(&input).await {
-                                    Ok(response) => {
-                                        app.current_response = response;
+                                    match session.send_message_stream(&input, tx_clone.clone()).await {
+                                        Ok(_) => {
+                                            // Send empty signal to indicate completion
+                                            let _ = tx_clone.send(String::new()).await;
+                                        }
+                                        Err(e) => {
+                                            // Send error as a chunk
+                                            let _ = tx_clone.send(format!("\n\nError: {}", e)).await;
+                                            let _ = tx_clone.send(String::new()).await;
+                                        }
                                     }
-                                    Err(e) => {
-                                        app.current_response = format!("Error: {}", e);
-                                    }
-                                }
-
-                                // Move to chat_messages and clear loading state
-                                app.chat_messages.push(format!("Assistant: {}", app.current_response));
-                                app.current_response.clear();
-                                app.is_loading = false;
+                                });
                             }
                             // Do NOT switch back to Normal mode, keep chatting
                         }
@@ -504,13 +526,8 @@ fn render_chat(f: &mut Frame, area: Rect, app: &App) {
     // Chat messages
     let mut messages = app.chat_messages.join("\n\n");
 
-    // Show loading indicator or current response
-    if app.is_loading {
-        if !messages.is_empty() {
-            messages.push_str("\n\n");
-        }
-        messages.push_str("Assistant: ...");
-    } else if !app.current_response.is_empty() {
+    // Append current streaming response
+    if !app.current_response.is_empty() {
         if !messages.is_empty() {
             messages.push_str("\n\n");
         }
