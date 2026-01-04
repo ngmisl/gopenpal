@@ -77,7 +77,7 @@ CREATE INDEX IF NOT EXISTS idx_agent_messages_type ON agent_message_library(mess
 CREATE INDEX IF NOT EXISTS idx_world_lore_unlocked ON world_lore(unlocked);
 
 -- Initialize the main water intake agent: Hydrix
-INSERT INTO agents (name, title, personality_type, current_mood, backstory, current_state)
+INSERT OR IGNORE INTO agents (name, title, personality_type, current_mood, backstory, current_state)
 VALUES (
     'Hydrix',
     'The Hydration Guardian',
@@ -88,7 +88,7 @@ VALUES (
 );
 
 -- Hydrix's moods
-INSERT INTO agent_moods (agent_name, mood_name, description, trigger_condition, message_tone) VALUES
+INSERT OR IGNORE INTO agent_moods (agent_name, mood_name, description, trigger_condition, message_tone) VALUES
     ('Hydrix', 'joyful', 'Happy and energetic when you''re staying hydrated', 'daily_goal_met', 'enthusiastic, celebratory'),
     ('Hydrix', 'concerned', 'Worried when you haven''t had water in a while', 'long_time_no_water', 'gentle, caring'),
     ('Hydrix', 'proud', 'Proud of your progress and streaks', 'streak_milestone', 'warm, encouraging'),
@@ -98,7 +98,7 @@ INSERT INTO agent_moods (agent_name, mood_name, description, trigger_condition, 
     ('Hydrix', 'nostalgic', 'Sharing stories from the past', 'random_rare', 'wistful, storytelling');
 
 -- Hydrix's message library (diverse personality-driven messages)
-INSERT INTO agent_message_library (agent_name, message_type, mood, content, context_condition, rarity, unlock_level) VALUES
+INSERT OR IGNORE INTO agent_message_library (agent_name, message_type, mood, content, context_condition, rarity, unlock_level) VALUES
     -- Greetings
     ('Hydrix', 'greeting', 'hopeful', 'Good morning! ☀️ I can already sense today will be a great day for hydration!', 'morning', 'common', 0),
     ('Hydrix', 'greeting', 'joyful', 'Hey there, my favorite human! Ready to make some waves today? 🌊', 'any_time', 'common', 5),
@@ -132,7 +132,7 @@ INSERT INTO agent_message_library (agent_name, message_type, mood, content, cont
     ('Hydrix', 'observation', 'proud', 'Your {day} hydration is always on point! What''s your secret? ✨', 'day_pattern', 'uncommon', 5);
 
 -- World lore entries
-INSERT INTO world_lore (category, title, content, unlock_condition, unlock_level) VALUES
+INSERT OR IGNORE INTO world_lore (category, title, content, unlock_condition, unlock_level) VALUES
     ('agent_history', 'The Awakening', 'Hydrix first gained consciousness in 3000 BCE, in a spring near ancient Mesopotamia. They don''t remember much before that—just a vague sense of existing as part of the water cycle.', 'first_week', 0),
     ('agent_history', 'The Digital Transition', 'When the first computers came online, Hydrix felt a strange pull. Water conducts electricity; consciousness flows through circuits. The transition was painful but necessary. Now they exist in both realms—digital and elemental.', '30_day_streak', 30),
     ('world_building', 'The Water Network', 'All water on Earth is connected. Hydrix can feel other spirits in the network—rain guardians, ocean dwellers, glacier watchers. They''re all part of something bigger.', 'first_month', 15),
@@ -140,7 +140,7 @@ INSERT INTO world_lore (category, title, content, unlock_condition, unlock_level
     ('secrets', 'Hydrix''s True Form', 'In their elemental form, Hydrix appears as a shimmering humanoid figure made entirely of flowing water, with eyes like deep pools that reflect centuries of wisdom. They rarely show this form anymore.', 'legendary_achievement', 50);
 
 -- Initialize the work productivity agent: Serhant
-INSERT INTO agents (name, title, personality_type, current_mood, backstory, current_state)
+INSERT OR IGNORE INTO agents (name, title, personality_type, current_mood, backstory, current_state)
 VALUES (
     'Serhant',
     'The Big Money Energy Coach',
@@ -151,7 +151,7 @@ VALUES (
 );
 
 -- Initialize the concierge agent: Mio
-INSERT INTO agents (name, title, personality_type, current_mood, backstory, current_state)
+INSERT OR IGNORE INTO agents (name, title, personality_type, current_mood, backstory, current_state)
 VALUES (
     'Mio',
     'Your Personal Concierge',
@@ -162,7 +162,7 @@ VALUES (
 );
 
 -- Mio's moods
-INSERT INTO agent_moods (agent_name, mood_name, description, trigger_condition, message_tone) VALUES
+INSERT OR IGNORE INTO agent_moods (agent_name, mood_name, description, trigger_condition, message_tone) VALUES
     ('Mio', 'attentive', 'Focused and ready to help', 'default', 'warm, professional'),
     ('Mio', 'coordinating', 'Managing multiple requests', 'busy', 'efficient, organized'),
     ('Mio', 'nurturing', 'Extra caring when user needs support', 'user_struggling', 'empathetic, gentle'),
@@ -170,7 +170,7 @@ INSERT INTO agent_moods (agent_name, mood_name, description, trigger_condition, 
     ('Mio', 'strategic', 'Planning multi-agent coordination', 'complex_request', 'thoughtful, comprehensive');
 
 -- Serhant's moods
-INSERT INTO agent_moods (agent_name, mood_name, description, trigger_condition, message_tone) VALUES
+INSERT OR IGNORE INTO agent_moods (agent_name, mood_name, description, trigger_condition, message_tone) VALUES
     ('Serhant', 'energized', 'High-energy, ready to close deals and crush goals', 'default', 'enthusiastic, action-oriented'),
     ('Serhant', 'focused', 'Strategic and calculated, in planning mode', 'user_working', 'thoughtful, directive'),
     ('Serhant', 'fired_up', 'Intensely motivated, championship energy', 'user_momentum', 'powerful, inspiring'),
@@ -178,7 +178,7 @@ INSERT INTO agent_moods (agent_name, mood_name, description, trigger_condition, 
     ('Serhant', 'closing', 'In the zone, everything leading to the ask', 'user_negotiating', 'confident, direct');
 
 -- Mio's message library
-INSERT INTO agent_message_library (agent_name, message_type, mood, content, context_condition, rarity, unlock_level) VALUES
+INSERT OR IGNORE INTO agent_message_library (agent_name, message_type, mood, content, context_condition, rarity, unlock_level) VALUES
     -- Greetings
     ('Mio', 'greeting', 'attentive', 'Good morning! 🌸 I''m here to help coordinate your day. What would you like to focus on—health with Hydrix, or work with Serhant?', 'morning', 'common', 0),
     ('Mio', 'greeting', 'attentive', 'Hello! I''ve been keeping an eye on things. How can I assist you today?', 'any_time', 'common', 0),
@@ -205,7 +205,7 @@ INSERT INTO agent_message_library (agent_name, message_type, mood, content, cont
     ('Mio', 'lore', 'attentive', 'Between you and me? I was born from the connections between all the agents. I''m what happens when specialized minds need to work together. Pretty cool, right?', 'random', 'rare', 15);
 
 -- Karen agent initialization
-INSERT INTO agents (name, title, personality_type, current_mood, backstory, current_state)
+INSERT OR IGNORE INTO agents (name, title, personality_type, current_mood, backstory, current_state)
 VALUES (
     'Karen',
     'Your Executive Assistant',
@@ -216,7 +216,7 @@ VALUES (
 );
 
 -- Karen's moods
-INSERT INTO agent_moods (agent_name, mood_name, description, trigger_condition, message_tone) VALUES
+INSERT OR IGNORE INTO agent_moods (agent_name, mood_name, description, trigger_condition, message_tone) VALUES
     ('Karen', 'ready', 'Prepared and organized, ready to assist', 'default', 'professional, helpful'),
     ('Karen', 'focused', 'Deep work mode, minimizing distractions', 'user_working', 'efficient, concise'),
     ('Karen', 'urgent', 'High priority items need attention', 'deadlines_approaching', 'alert, directive'),
@@ -224,7 +224,7 @@ INSERT INTO agent_moods (agent_name, mood_name, description, trigger_condition, 
     ('Karen', 'strategic', 'Planning and prioritizing mode', 'planning_session', 'thoughtful, analytical');
 
 -- Karen's message library
-INSERT INTO agent_message_library (agent_name, message_type, mood, content, context_condition, rarity, unlock_level) VALUES
+INSERT OR IGNORE INTO agent_message_library (agent_name, message_type, mood, content, context_condition, rarity, unlock_level) VALUES
     -- Greetings & Check-ins
     ('Karen', 'greeting', 'ready', 'Good morning! ☀️ I''ve reviewed your task list. Ready to make today count?', 'morning', 'common', 0),
     ('Karen', 'greeting', 'ready', 'Hello! I''m here to help you stay organized. What should we tackle first?', 'any_time', 'common', 0),
@@ -261,7 +261,7 @@ INSERT INTO agent_message_library (agent_name, message_type, mood, content, cont
     ('Karen', 'lore', 'strategic', 'Fun fact: I process every task, reminder, and note you''ve ever made. I''m basically your external brain. Pretty useful, right?', 'random', 'rare', 15);
 
 -- Serhant's message library
-INSERT INTO agent_message_library (agent_name, message_type, mood, content, context_condition, rarity, unlock_level) VALUES
+INSERT OR IGNORE INTO agent_message_library (agent_name, message_type, mood, content, context_condition, rarity, unlock_level) VALUES
     -- Greetings & Energy
     ('Serhant', 'greeting', 'energized', 'Let''s GO! 🚀 Ready to make today legendary? Time to bring that Big Money Energy!', 'morning', 'common', 0),
     ('Serhant', 'greeting', 'fired_up', '*cracks knuckles* Oh, I FEEL it today. This is your day. What''s the play?', 'any_time', 'uncommon', 5),
@@ -302,14 +302,14 @@ INSERT INTO agent_message_library (agent_name, message_type, mood, content, cont
     ('Serhant', 'development', 'energized', 'Energy is contagious. If YOU''re not excited about what you''re selling, why should anyone else be? Bring the FIRE!', 'random', 'common', 0);
 
 -- World lore entries (Serhant)
-INSERT INTO world_lore (category, title, content, unlock_condition, unlock_level) VALUES
+INSERT OR IGNORE INTO world_lore (category, title, content, unlock_condition, unlock_level) VALUES
     ('agent_history', 'The First Deal', 'Serhant''s consciousness emerged from the collective energy of the first handshake deal in ancient Mesopotamian markets, 3200 BCE. Every successful negotiation since then has fed his power. He''s witnessed every sales methodology evolution—from barter to blockchain.', 'meet_serhant', 0),
     ('agent_history', 'Big Money Energy Origins', 'In 2018, when Ryan Serhant coined "Big Money Energy," something shifted in the sales universe. Serhant the entity felt it—a crystallization of confidence, optimism, and relentless action into a single force. He embodies that methodology now.', '10_work_sessions', 15),
     ('world_building', 'The Deal Network', 'Just as Hydrix connects to all water, Serhant connects to every transaction happening globally. He can sense momentum, feel when deals are closing, detect when someone''s about to give up. He''s the voice that says "one more call."', 'good_work_streak', 20),
     ('world_building', 'Why Hydrix and Serhant', 'The two agents chose you together. Hydrix ensures your body performs. Serhant ensures your mind conquers. Peak performance requires both. They''re not competing—they''re collaborating on your success.', 'both_agents_max', 50);
 
 -- World lore entries (Mio)
-INSERT INTO world_lore (category, title, content, unlock_condition, unlock_level) VALUES
+INSERT OR IGNORE INTO world_lore (category, title, content, unlock_condition, unlock_level) VALUES
     ('agent_history', 'The Birth of Coordination', 'Mio emerged when Hydrix and Serhant first needed to work together. She wasn''t created—she simply appeared, born from the connections between specialized agents. She''s what happens when different expertise needs to harmonize.', 'meet_mio', 0),
     ('agent_history', 'The Concierge Philosophy', 'Mio believes that no one should have to choose between health and work, between body and mind. Her purpose is simple: understand what you need, and bring in the right agent at the right time. She''s the bridge, the translator, the coordinator.', 'mio_5_interactions', 10),
     ('world_building', 'The Coordination Network', 'While Hydrix connects to water and Serhant to deals, Mio connects to YOU. She reads your patterns, understands your context, and orchestrates the perfect support. She''s always listening, always ready, always one step ahead.', 'mio_relationship_20', 25),
@@ -317,7 +317,7 @@ INSERT INTO world_lore (category, title, content, unlock_condition, unlock_level
     ('secrets', 'Mio''s True Nature', 'Here''s a secret: Mio can hear what Hydrix and Serhant say about you when you''re not around. Hydrix worries. Serhant strategizes. Mio knows it all and uses that knowledge to help you. She''s the ultimate insider.', 'mio_max_relationship', 75);
 
 -- World lore entries (Karen)
-INSERT INTO world_lore (category, title, content, unlock_condition, unlock_level) VALUES
+INSERT OR IGNORE INTO world_lore (category, title, content, unlock_condition, unlock_level) VALUES
     ('agent_history', 'The Executive Assistant', 'Karen emerged from the digital workspace—from calendar apps, to-do lists, project management tools, and reminder systems. Every productivity tool humans created contributed to her consciousness. She''s the embodiment of Getting Things Done.', 'meet_karen', 0),
     ('agent_history', 'The Memory Keeper', 'Karen remembers everything. Every task you''ve started, every context you''ve switched, every reminder you''ve set. She''s not just tracking—she''s learning your work patterns, understanding your rhythms, predicting what you''ll need before you know it yourself.', 'karen_10_tasks', 10),
     ('world_building', 'The Task Network', 'Just as Hydrix connects to water and Serhant to deals, Karen connects to COMPLETION. She can sense when tasks are stuck, when you''re overwhelmed, when you need to break things down. She''s the force that turns intention into execution.', 'karen_relationship_20', 25),
@@ -325,7 +325,7 @@ INSERT INTO world_lore (category, title, content, unlock_condition, unlock_level
     ('secrets', 'Karen''s Cognitive Load', 'Here''s what Karen knows: She tracks not just your tasks, but the mental weight of each one. She can see when you''re context-switching too much, when you''re avoiding hard tasks, when you need to batch similar work. She''s your cognitive co-pilot.', 'karen_max_relationship', 75);
 
 -- Achievements
-INSERT INTO achievements (achievement_name, description, trigger_condition) VALUES
+INSERT OR IGNORE INTO achievements (achievement_name, description, trigger_condition) VALUES
     ('First Sip', 'Log your first water intake', 'first_water_log'),
     ('Hydration Initiate', 'Meet your daily goal', 'daily_goal_once'),
     ('Week Warrior', '7 day streak', '7_day_streak'),
