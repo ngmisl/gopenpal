@@ -66,3 +66,4 @@ world/
 *.db
 *.db-shm
 *.db-wal
+opencode.json
