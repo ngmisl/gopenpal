@@ -14,7 +14,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Gauge, List, ListItem, Paragraph, Tabs, Wrap},
+    widgets::{Block, Borders, Gauge, List, ListItem, Paragraph, Tabs},
     Frame, Terminal,
 };
 use std::io;
@@ -27,6 +27,7 @@ use crate::cron::CronManager;
 use crate::db::{Database, ReminderSettings, WaterIntake};
 use crate::error::Result;
 use crate::openrouter::OpenRouterClient;
+use tui_chat::{ChatArea, ChatMessage, InputArea};
 
 /// TUI application state.
 struct App {
@@ -36,14 +37,12 @@ struct App {
     tabs: Vec<&'static str>,
     /// Water input buffer
     water_input: String,
-    /// Chat input buffer
-    chat_input: String,
-    /// Chat messages display
-    chat_messages: Vec<String>,
+    /// Chat area widget
+    chat_area: ChatArea,
+    /// Input area widget
+    input_area: InputArea,
     /// Whether we're in input mode
     input_mode: InputMode,
-    /// Scroll position for chat
-    chat_scroll: u16,
     /// Selected cron preset index
     cron_selected: usize,
     /// Status message for cron operations
@@ -56,17 +55,12 @@ struct App {
     settings: Option<ReminderSettings>,
     /// Cached agents
     agents: Vec<Agent>,
-    /// Current streaming response being built
-    current_response: String,
-    /// Whether a request is in progress
-    is_loading: bool,
 }
 
 #[derive(PartialEq)]
 enum InputMode {
     Normal,
     EditingWater,
-    EditingChat,
 }
 
 impl Default for App {
@@ -75,18 +69,15 @@ impl Default for App {
             current_tab: 0,
             tabs: vec!["Dashboard", "Water", "Chat", "Agents", "Cron", "Settings"],
             water_input: String::new(),
-            chat_input: String::new(),
-            chat_messages: Vec::new(),
+            chat_area: ChatArea::new(),
+            input_area: InputArea::new(),
             input_mode: InputMode::Normal,
-            chat_scroll: 0,
             cron_selected: 0,
             cron_status: String::new(),
             today_water_total: 0,
             today_water_entries: Vec::new(),
             settings: None,
             agents: Vec::new(),
-            current_response: String::new(),
-            is_loading: false,
         }
     }
 }
@@ -165,21 +156,12 @@ async fn run_app(
 
         terminal.draw(|f| ui(f, app))?;
 
-        // Handle streaming chat responses
-        while let Ok(chunk) = rx.try_recv() {
-            if chunk.is_empty() {
-                // Empty chunk signals completion
-                // Move completed response to chat_messages
-                if !app.current_response.is_empty() {
-                    app.chat_messages
-                        .push(format!("Assistant: {}", app.current_response));
-                    app.current_response.clear();
-                }
-                app.is_loading = false;
-            } else {
-                // Append streaming chunk
-                app.current_response.push_str(&chunk);
-            }
+        // Handle async chat responses
+        if let Ok(msg) = rx.try_recv() {
+            app.chat_area.add_message(ChatMessage {
+                sender: "Assistant".to_string(),
+                content: msg,
+            });
         }
 
         // Poll for events with timeout
@@ -202,30 +184,68 @@ async fn run_app(
                         KeyCode::Char('w') if app.current_tab == 1 => {
                             app.input_mode = InputMode::EditingWater;
                         }
-                        KeyCode::Char('c') if app.current_tab == 2 => {
-                            app.input_mode = InputMode::EditingChat;
+                        KeyCode::Enter if app.current_tab == 2 => {
+                            if let Some(api_key) = api_key.as_ref() {
+                                let input = app.input_area.submit();
+                                
+                                if !input.is_empty() {
+                                    app.chat_area.add_message(ChatMessage {
+                                        sender: "You".to_string(),
+                                        content: input.clone(),
+                                    });
+
+                                    let api_key_clone = api_key.clone();
+                                    let db_clone = db.clone();
+                                    let tx_clone = tx.clone();
+
+                                    tokio::spawn(async move {
+                                        let client = OpenRouterClient::new(api_key_clone);
+                                        let session = ChatSession::new(
+                                            db_clone,
+                                            client,
+                                            "anthropic/claude-3.5-sonnet".to_string(),
+                                        );
+
+                                        match session.send_message_stream(&input, tx_clone.clone()).await {
+                                            Ok(_) => {
+                                                let _ = tx_clone.send(String::new()).await;
+                                            }
+                                            Err(e) => {
+                                                let _ = tx_clone.send(format!("\n\nError: {}", e)).await;
+                                                let _ = tx_clone.send(String::new()).await;
+                                            }
+                                        }
+                                    });
+                                }
+                            }
                         }
                         KeyCode::Up if app.current_tab == 2 => {
-                            app.chat_scroll = app.chat_scroll.saturating_add(1);
+                            app.chat_area.scroll_up(1);
                         }
                         KeyCode::Down if app.current_tab == 2 => {
-                            app.chat_scroll = app.chat_scroll.saturating_sub(1);
+                            app.chat_area.scroll_down(1);
                         }
                         KeyCode::PageUp if app.current_tab == 2 => {
-                            app.chat_scroll = app.chat_scroll.saturating_add(10);
+                            app.chat_area.scroll_up(10);
                         }
                         KeyCode::PageDown if app.current_tab == 2 => {
-                            app.chat_scroll = app.chat_scroll.saturating_sub(10);
+                            app.chat_area.scroll_down(10);
+                        }
+                        KeyCode::Char(c) if app.current_tab == 2 => {
+                            app.input_area.insert_char(c);
+                        }
+                        KeyCode::Backspace if app.current_tab == 2 => {
+                            app.input_area.backspace();
                         }
                         // Cron tab controls
-                        KeyCode::Up if app.current_tab == 3 => {
+                        KeyCode::Up if app.current_tab == 4 => {
                             app.cron_selected = app.cron_selected.saturating_sub(1);
                         }
-                        KeyCode::Down if app.current_tab == 3 => {
+                        KeyCode::Down if app.current_tab == 4 => {
                             let presets = CronManager::presets();
                             app.cron_selected = (app.cron_selected + 1).min(presets.len() - 1);
                         }
-                        KeyCode::Enter if app.current_tab == 3 => {
+                        KeyCode::Enter if app.current_tab == 4 => {
                             let cron = CronManager::new(None);
                             let presets = CronManager::presets();
                             let (_, schedule) = presets[app.cron_selected];
@@ -252,7 +272,7 @@ async fn run_app(
                                 Err(e) => app.cron_status = format!("Error: {}", e),
                             }
                         }
-                        KeyCode::Char('r') if app.current_tab == 3 => {
+                        KeyCode::Char('r') if app.current_tab == 4 => {
                             let cron = CronManager::new(None);
                             match cron.remove() {
                                 Ok(_) => app.cron_status = "Cron job removed".to_string(),
@@ -283,73 +303,6 @@ async fn run_app(
                         }
                         _ => {}
                     },
-                    InputMode::EditingChat => match key.code {
-                        KeyCode::Enter => {
-                            if !app.chat_input.is_empty() && api_key.is_some() {
-                                let input = app.chat_input.clone();
-                                app.chat_messages.push(format!("You: {}", input));
-                                app.chat_input.clear();
-
-                                // Start streaming
-                                app.is_loading = true;
-                                app.current_response.clear();
-
-                                let api_key_clone = api_key.clone().unwrap();
-                                let db_clone = db.clone();
-                                let tx_clone = tx.clone();
-
-                                tokio::spawn(async move {
-                                    let client = OpenRouterClient::new(api_key_clone);
-                                    let session = ChatSession::new(
-                                        db_clone,
-                                        client,
-                                        "anthropic/claude-3.5-sonnet".to_string(),
-                                    );
-
-                                    match session.send_message_stream(&input, tx_clone.clone()).await {
-                                        Ok(_) => {
-                                            // Send empty signal to indicate completion
-                                            let _ = tx_clone.send(String::new()).await;
-                                        }
-                                        Err(e) => {
-                                            // Send error as a chunk
-                                            let _ = tx_clone.send(format!("\n\nError: {}", e)).await;
-                                            let _ = tx_clone.send(String::new()).await;
-                                        }
-                                    }
-                                });
-                            }
-                            // Do NOT switch back to Normal mode, keep chatting
-                        }
-                        KeyCode::Char(c) => {
-                            app.chat_input.push(c);
-                        }
-                        KeyCode::Backspace => {
-                            app.chat_input.pop();
-                        }
-                        KeyCode::Esc => {
-                            // Only Esc leaves chat mode now
-                            app.input_mode = InputMode::Normal;
-                            app.chat_input.clear();
-                        }
-                        _ => {}
-                    },
-                }
-
-                // Auto-enter chat mode if in Chat tab
-                if app.current_tab == 2 && app.input_mode == InputMode::Normal {
-                    match key.code {
-                        KeyCode::Char(c)
-                            if c != 'q' && c != 'h' && c != 'l' && c != 'j' && c != 'k' =>
-                        {
-                            app.input_mode = InputMode::EditingChat;
-                            app.chat_input.push(c);
-                        }
-                        KeyCode::Enter => {
-                            app.input_mode = InputMode::EditingChat;
-                        }
-                        _ => {}
-                    }
                 }
             }
         }
@@ -361,7 +314,7 @@ async fn run_app(
 /// This function is called on each frame to render the current state
 /// of the application. It uses blocking calls to fetch data, which is
 /// acceptable here as rendering should be fast.
-fn ui(f: &mut Frame, app: &App) {
+fn ui(f: &mut Frame, app: &mut App) {
     let size = f.area();
 
     // Create the layout
@@ -399,7 +352,7 @@ fn ui(f: &mut Frame, app: &App) {
 }
 
 /// Render the dashboard tab.
-fn render_dashboard(f: &mut Frame, area: Rect, app: &App) {
+fn render_dashboard(f: &mut Frame, area: Rect, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -467,7 +420,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, app: &App) {
 }
 
 /// Render the water tracking tab.
-fn render_water_tracking(f: &mut Frame, area: Rect, app: &App) {
+fn render_water_tracking(f: &mut Frame, area: Rect, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(3), Constraint::Min(0)])
@@ -517,69 +470,21 @@ fn render_water_tracking(f: &mut Frame, area: Rect, app: &App) {
 }
 
 /// Render the chat tab.
-fn render_chat(f: &mut Frame, area: Rect, app: &App) {
+fn render_chat(f: &mut Frame, area: Rect, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(3)])
         .split(area);
 
-    // Chat messages
-    let mut messages = app.chat_messages.join("\n\n");
+    // Use tui-chat ChatArea widget
+    app.chat_area.render(f, chunks[0]);
 
-    // Append current streaming response
-    if !app.current_response.is_empty() {
-        if !messages.is_empty() {
-            messages.push_str("\n\n");
-        }
-        messages.push_str("Assistant: ");
-        messages.push_str(&app.current_response);
-    }
-
-    // Calculate effective scroll to show bottom by default
-    // Estimate lines count - AGGRESSIVE estimation to handle word wrapping safely
-    let width = chunks[0].width.saturating_sub(4) as usize; // Reduce width buffer
-    let wrap_width = (width as f64 * 0.9) as usize; // Assume 90% utilization due to word wrap
-    let total_lines: usize = messages
-        .lines()
-        .map(|l| (l.len() + wrap_width - 1) / wrap_width.max(1)) // Ceiling division with safety margin
-        .sum();
-    let view_height = chunks[0].height.saturating_sub(2) as usize;
-    let max_scroll = total_lines.saturating_sub(view_height) as u16;
-
-    // app.chat_scroll is "lines from bottom"
-    let scroll_offset = max_scroll.saturating_sub(app.chat_scroll);
-
-    let messages_paragraph = Paragraph::new(messages)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Chat History (↑/↓ to scroll)"),
-        )
-        .wrap(Wrap { trim: false })
-        .scroll((scroll_offset, 0));
-    f.render_widget(messages_paragraph, chunks[0]);
-
-    // Input area
-    let input_style = if app.input_mode == InputMode::EditingChat {
-        Style::default().fg(Color::Yellow)
-    } else {
-        Style::default()
-    };
-
-    let title = if app.current_tab == 2 {
-        "Message - Type to chat, Enter to send, Esc to cancel"
-    } else {
-        "Message"
-    };
-
-    let input = Paragraph::new(app.chat_input.as_str())
-        .style(input_style)
-        .block(Block::default().borders(Borders::ALL).title(title));
-    f.render_widget(input, chunks[1]);
+    // Use tui-chat InputArea widget
+    app.input_area.render(f, chunks[1]);
 }
 
 /// Render the agents status tab.
-fn render_agents(f: &mut Frame, area: Rect, app: &App) {
+fn render_agents(f: &mut Frame, area: Rect, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(3), Constraint::Min(0)])
@@ -697,7 +602,7 @@ fn render_agents(f: &mut Frame, area: Rect, app: &App) {
 }
 
 /// Render the cron management tab.
-fn render_cron(f: &mut Frame, area: Rect, app: &App) {
+fn render_cron(f: &mut Frame, area: Rect, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -781,7 +686,7 @@ fn render_cron(f: &mut Frame, area: Rect, app: &App) {
 }
 
 /// Render the settings tab.
-fn render_settings(f: &mut Frame, area: Rect, app: &App) {
+fn render_settings(f: &mut Frame, area: Rect, app: &mut App) {
     // Use cached settings
     let settings = &app.settings;
 

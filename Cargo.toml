@@ -44,6 +44,7 @@ notify-rust = "4.11"
 # Terminal interaction
 crossterm = "0.28"
 ratatui = "0.29"
+tui-chat = "0.2.1"
 
 # Home directory detection
 dirs = "5.0"
