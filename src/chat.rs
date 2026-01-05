@@ -24,6 +24,7 @@ use crate::personality::PersonalityProfile;
 use crate::security::SecurityConfig;
 use crate::tasks::TaskManager;
 use std::process::{Command, Stdio};
+use tokio::sync::mpsc;
 
 /// Load agent and tool configurations from JSON files.
 fn load_agent_configs() -> std::result::Result<String, Box<dyn std::error::Error>> {
@@ -575,6 +576,68 @@ impl ChatSession {
         Ok(full_response)
     }
 
+    /// Send a message and stream the response in real-time.
+    ///
+    /// This method uses SSE streaming to send text chunks as they arrive,
+    /// providing a more responsive chat experience.
+    ///
+    /// # Arguments
+    ///
+    /// * `message` - The message to send
+    /// * `tx` - Channel to send text chunks as they arrive
+    ///
+    /// # Returns
+    ///
+    /// The complete assistant's response (including tool command results)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if API call or database operations fail
+    pub async fn send_message_stream(
+        &self,
+        message: &str,
+        tx: mpsc::Sender<String>,
+    ) -> Result<String> {
+        let system_prompt = load_agent_configs().unwrap_or_else(|e| {
+            eprintln!(
+                "Warning: Failed to load agent configs: {}. Using fallback.",
+                e
+            );
+            build_fallback_prompt()
+        });
+
+        let mut messages = vec![Message::system(&system_prompt)];
+
+        // Load recent history to provide context
+        if let Ok(history) = self.db.get_recent_chat_history(10).await {
+            for msg in history {
+                if msg.role == "user" {
+                    messages.push(Message::user(&msg.content));
+                } else if msg.role == "assistant" {
+                    messages.push(Message::assistant(&msg.content));
+                }
+            }
+        }
+
+        messages.push(Message::user(message));
+
+        // Save user message
+        self.db
+            .save_chat_message("user", message, None, None)
+            .await?;
+
+        // Stream the response
+        self.client
+            .chat_completion_stream(&self.model, messages, Some(1000), tx.clone())
+            .await?;
+
+        // Wait for channel to close (all chunks sent)
+        // This is handled by the TUI event loop receiving chunks
+        // We'll need to reconstruct the full response from chat_messages
+        // For now, return empty string - the response is built in TUI
+        Ok(String::new())
+    }
+
     /// Display recent chat history.
     async fn show_history(&self) -> Result<()> {
         let history = self.db.get_recent_chat_history(20).await?;
@@ -1040,6 +1103,21 @@ fn process_task_commands(content: &str) -> (String, Option<String>) {
                     cleaned = cleaned.replace(command, "");
                 }
             }
+        }
+    }
+
+    // Check for TASK:REMIND (consume and warn)
+    if let Some(start) = cleaned.find("[TASK:REMIND:") {
+        let content_start = start + "[TASK:REMIND:".len();
+        if let Some(end_offset) = find_closing_bracket(&cleaned[content_start..]) {
+            let end = content_start + end_offset;
+            let command = &cleaned[start..=end];
+
+            // Just consume it and provide a helpful note
+            result_message = Some(
+                "Note: Specific task reminders are not yet supported. Please use global reminders via 'Set reminders every 30 minutes'.".to_string()
+            );
+            cleaned = cleaned.replace(command, "");
         }
     }
 

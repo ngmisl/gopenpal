@@ -56,6 +56,10 @@ struct App {
     settings: Option<ReminderSettings>,
     /// Cached agents
     agents: Vec<Agent>,
+    /// Current streaming response being built
+    current_response: String,
+    /// Whether a request is in progress
+    is_loading: bool,
 }
 
 #[derive(PartialEq)]
@@ -81,6 +85,8 @@ impl Default for App {
             today_water_entries: Vec::new(),
             settings: None,
             agents: Vec::new(),
+            current_response: String::new(),
+            is_loading: false,
         }
     }
 }
@@ -159,9 +165,21 @@ async fn run_app(
 
         terminal.draw(|f| ui(f, app))?;
 
-        // Handle async chat responses
-        if let Ok(msg) = rx.try_recv() {
-            app.chat_messages.push(format!("Assistant: {}", msg));
+        // Handle streaming chat responses
+        while let Ok(chunk) = rx.try_recv() {
+            if chunk.is_empty() {
+                // Empty chunk signals completion
+                // Move completed response to chat_messages
+                if !app.current_response.is_empty() {
+                    app.chat_messages
+                        .push(format!("Assistant: {}", app.current_response));
+                    app.current_response.clear();
+                }
+                app.is_loading = false;
+            } else {
+                // Append streaming chunk
+                app.current_response.push_str(&chunk);
+            }
         }
 
         // Poll for events with timeout
@@ -272,7 +290,10 @@ async fn run_app(
                                 app.chat_messages.push(format!("You: {}", input));
                                 app.chat_input.clear();
 
-                                // Send chat message asynchronously
+                                // Start streaming
+                                app.is_loading = true;
+                                app.current_response.clear();
+
                                 let api_key_clone = api_key.clone().unwrap();
                                 let db_clone = db.clone();
                                 let tx_clone = tx.clone();
@@ -285,12 +306,15 @@ async fn run_app(
                                         "anthropic/claude-3.5-sonnet".to_string(),
                                     );
 
-                                    match session.send_message(&input).await {
-                                        Ok(response) => {
-                                            let _ = tx_clone.send(response).await;
+                                    match session.send_message_stream(&input, tx_clone.clone()).await {
+                                        Ok(_) => {
+                                            // Send empty signal to indicate completion
+                                            let _ = tx_clone.send(String::new()).await;
                                         }
                                         Err(e) => {
-                                            let _ = tx_clone.send(format!("Error: {}", e)).await;
+                                            // Send error as a chunk
+                                            let _ = tx_clone.send(format!("\n\nError: {}", e)).await;
+                                            let _ = tx_clone.send(String::new()).await;
                                         }
                                     }
                                 });
@@ -500,7 +524,16 @@ fn render_chat(f: &mut Frame, area: Rect, app: &App) {
         .split(area);
 
     // Chat messages
-    let messages: String = app.chat_messages.join("\n\n");
+    let mut messages = app.chat_messages.join("\n\n");
+
+    // Append current streaming response
+    if !app.current_response.is_empty() {
+        if !messages.is_empty() {
+            messages.push_str("\n\n");
+        }
+        messages.push_str("Assistant: ");
+        messages.push_str(&app.current_response);
+    }
 
     // Calculate effective scroll to show bottom by default
     // Estimate lines count - AGGRESSIVE estimation to handle word wrapping safely

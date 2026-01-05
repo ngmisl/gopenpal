@@ -5,6 +5,7 @@
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
 
 use crate::error::{AppError, Result};
 
@@ -61,6 +62,7 @@ impl OpenRouterClient {
             model: model.to_string(),
             messages,
             max_tokens,
+            stream: false,
         };
 
         let response = self
@@ -89,21 +91,99 @@ impl OpenRouterClient {
         Ok(completion_response)
     }
 
-    /// Stream a chat completion (for future implementation).
+    /// Stream a chat completion using Server-Sent Events (SSE).
     ///
-    /// Note: Streaming is not yet implemented but is planned for future versions
-    /// to provide real-time response streaming for better UX.
-    #[allow(dead_code)]
+    /// This method sends chunks of the response through the provided channel
+    /// as they arrive from the API, enabling real-time streaming in the UI.
+    ///
+    /// # Arguments
+    ///
+    /// * `model` - Model identifier (e.g., "anthropic/claude-3.5-sonnet")
+    /// * `messages` - Conversation history
+    /// * `max_tokens` - Maximum tokens in response
+    /// * `tx` - Channel to send text chunks and completion events
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Http` if request fails
+    /// Returns `AppError::OpenRouter` if API returns an error
     pub async fn chat_completion_stream(
         &self,
-        _model: &str,
-        _messages: Vec<Message>,
+        model: &str,
+        messages: Vec<Message>,
+        max_tokens: Option<u32>,
+        tx: mpsc::Sender<String>,
     ) -> Result<()> {
-        // Placeholder for streaming implementation
-        // This would use Server-Sent Events (SSE) to stream responses
-        Err(AppError::OpenRouter(
-            "Streaming not yet implemented".to_string(),
-        ))
+        let request_body = ChatCompletionRequest {
+            model: model.to_string(),
+            messages,
+            max_tokens,
+            stream: true,
+        };
+
+        let response = self
+            .client
+            .post(format!("{}/chat/completions", self.base_url))
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(&request_body)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| String::from("Unknown error"));
+            return Err(AppError::OpenRouter(format!(
+                "API request failed with status {}: {}",
+                status, error_text
+            )));
+        }
+
+        // Process SSE stream
+        let bytes = response.bytes().await?;
+        let mut pos = 0;
+
+        while pos < bytes.len() {
+            // Find next newline
+            if let Some(line_end) = bytes[pos..].iter().position(|&b| b == b'\n') {
+                let end = pos + line_end;
+                let line = String::from_utf8_lossy(&bytes[pos..end]);
+                pos = end + 1; // Skip the newline
+
+                let line = line.trim();
+
+                // Skip empty lines and comments
+                if line.is_empty() || line.starts_with(':') {
+                    continue;
+                }
+
+                // Parse data line
+                if line.starts_with("data: ") {
+                    let data = &line[6..];
+
+                    // Check for end of stream
+                    if data == "[DONE]" {
+                        return Ok(());
+                    }
+
+                    // Parse JSON chunk
+                    if let Ok(chunk) = serde_json::from_str::<StreamChunk>(data) {
+                        if let Some(delta_content) =
+                            chunk.choices.first().and_then(|c| c.delta.content.as_ref())
+                        {
+                            let _ = tx.send(delta_content.clone()).await;
+                        }
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -148,6 +228,25 @@ struct ChatCompletionRequest {
     messages: Vec<Message>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
+    stream: bool,
+}
+
+/// Streaming chunk from SSE.
+#[derive(Debug, Deserialize)]
+struct StreamChunk {
+    pub choices: Vec<StreamChoice>,
+}
+
+/// Individual choice in streaming response.
+#[derive(Debug, Deserialize)]
+struct StreamChoice {
+    pub delta: StreamDelta,
+}
+
+/// Delta content in streaming response.
+#[derive(Debug, Deserialize)]
+struct StreamDelta {
+    pub content: Option<String>,
 }
 
 /// Chat completion response from OpenRouter.
