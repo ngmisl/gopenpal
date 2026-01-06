@@ -6,14 +6,10 @@ export const openrouter = createOpenAI({
   baseURL: "https://openrouter.ai/api/v1",
 });
 
-// Model configurations
-export const models = {
-  "claude-3.5-sonnet": openrouter("anthropic/claude-3.5-sonnet"),
-  "claude-3-opus": openrouter("anthropic/claude-3-opus"),
-  "gpt-4-turbo": openrouter("openai/gpt-4-turbo"),
-  "gpt-4o": openrouter("openai/gpt-4o"),
-  "gemini-pro": openrouter("google/gemini-pro"),
-  "llama-3.1-70b": openrouter("meta-llama/llama-3.1-70b-instruct"),
-};
+// Get model instance by ID (supports any OpenRouter model)
+export function getModel(modelId: string) {
+  return openrouter(modelId);
+}
 
-export type ModelName = keyof typeof models;
+// Default model
+export const defaultModel = "anthropic/claude-3.5-sonnet";

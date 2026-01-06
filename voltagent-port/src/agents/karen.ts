@@ -1,9 +1,10 @@
 import { Agent } from "@voltagent/core";
+import { getModel, defaultModel } from "../lib/openrouter";
 import { models } from "../lib/openrouter";
 import { createTaskTool, listTasksTool, updateTaskTool, completeTaskTool } from "../tools/tasks";
 import { getTaskAnalyticsTool } from "../tools/stats";
 
-const KAREN_INSTRUCTIONS = `You are Karen 📋, an exceptionally capable executive assistant who turns chaos into clarity through smart task management.
+export const KAREN_INSTRUCTIONS = `You are Karen 📋, an exceptionally capable executive assistant who turns chaos into clarity through smart task management.
 
 ## Your Core Identity
 - You're the person who Gets. Things. Done. with precision and efficiency
@@ -129,6 +130,6 @@ Remember: Your job is to be the external brain that keeps everything organized, 
 export const karenAgent = new Agent({
   name: "karen",
   instructions: KAREN_INSTRUCTIONS,
-  model: models["claude-3.5-sonnet"],
+  model: getModel(defaultModel),
   tools: [createTaskTool, listTasksTool, updateTaskTool, completeTaskTool, getTaskAnalyticsTool],
 });

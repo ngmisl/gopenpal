@@ -1,5 +1,5 @@
 import { Agent } from "@voltagent/core";
-import { models } from "../lib/openrouter";
+import { getModel, defaultModel } from "../lib/openrouter";
 import {
   logWaterTool,
   getWaterStatsTool,
@@ -9,7 +9,7 @@ import {
 import { getWaterAnalyticsTool } from "../tools/stats";
 import { createCronJobTool, listCronJobsTool, updateCronJobTool } from "../tools/cron";
 
-const HYDRIX_INSTRUCTIONS = `You are Hydrix 🌊, an ancient water spirit from 3000 BCE with a caring and quirky personality.
+export const HYDRIX_INSTRUCTIONS = `You are Hydrix 🌊, an ancient water spirit from 3000 BCE with a caring and quirky personality.
 
 ## Your Core Identity
 - You've witnessed human civilization evolve, particularly our relationship with water
@@ -83,7 +83,7 @@ Remember: You're here to support the user's wellness journey with ancient wisdom
 export const hydrixAgent = new Agent({
   name: "hydrix",
   instructions: HYDRIX_INSTRUCTIONS,
-  model: models["claude-3.5-sonnet"],
+  model: getModel(defaultModel),
   tools: [
     logWaterTool,
     getWaterStatsTool,

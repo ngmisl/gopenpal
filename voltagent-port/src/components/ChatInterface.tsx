@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect } from "react";
 import { useChatStore } from "../store/chat";
 import { useAgentsStore } from "../store/agents";
+import { useSettingsStore } from "../store/settings";
 
 export function ChatInterface() {
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { messages, isStreaming, streamingMessage, addMessage, setIsStreaming } = useChatStore();
   const { selectedAgent } = useAgentsStore();
+  const { selectedModel } = useSettingsStore();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -44,6 +46,7 @@ export function ChatInterface() {
               content: userMessage,
             },
           ],
+          model: selectedModel,
         }),
       });
 

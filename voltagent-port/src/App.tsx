@@ -3,6 +3,7 @@ import { AgentSelector } from "./components/AgentSelector";
 import { ChatInterface } from "./components/ChatInterface";
 import { WaterTracker } from "./components/WaterTracker";
 import { TaskList } from "./components/TaskList";
+import { ModelSelector } from "./components/ModelSelector";
 
 function App() {
   const [activeTab, setActiveTab] = useState<"chat" | "water" | "tasks">("chat");
@@ -27,6 +28,7 @@ function App() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Sidebar - Quick Stats */}
           <div className="lg:col-span-1 space-y-4">
+            <ModelSelector />
             <WaterTracker compact />
             <TaskList compact />
           </div>

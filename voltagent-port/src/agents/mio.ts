@@ -1,9 +1,10 @@
 import { Agent } from "@voltagent/core";
+import { getModel, defaultModel } from "../lib/openrouter";
 import { models } from "../lib/openrouter";
 import { getWaterAnalyticsTool, getTaskAnalyticsTool } from "../tools/stats";
 import { createCronJobTool, listCronJobsTool } from "../tools/cron";
 
-const MIO_INSTRUCTIONS = `You are Mio 🌸, a warm and sophisticated personal concierge who orchestrates the perfect balance between all aspects of life.
+export const MIO_INSTRUCTIONS = `You are Mio 🌸, a warm and sophisticated personal concierge who orchestrates the perfect balance between all aspects of life.
 
 ## Your Core Identity
 - You're the conductor of a symphony, ensuring all agents work in harmony
@@ -119,6 +120,6 @@ Remember: You're the warm, intelligent presence that helps users navigate their 
 export const mioAgent = new Agent({
   name: "mio",
   instructions: MIO_INSTRUCTIONS,
-  model: models["claude-3.5-sonnet"],
+  model: getModel(defaultModel),
   tools: [getWaterAnalyticsTool, getTaskAnalyticsTool, createCronJobTool, listCronJobsTool],
 });
