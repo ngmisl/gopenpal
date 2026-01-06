@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { AgentState, AgentMetadata } from "../schemas/agent";
+import type { AgentState, AgentMetadata } from "../../schemas/agent";
 
 export const agentMetadata: Record<string, AgentMetadata> = {
   hydrix: {

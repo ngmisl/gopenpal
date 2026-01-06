@@ -28,7 +28,7 @@ export function ChatInterface() {
     addMessage({
       role: "user",
       content: userMessage,
-      agent: selectedAgent,
+      agent: selectedAgent as "hydrix" | "serhant" | "mio" | "karen",
     });
 
     setIsStreaming(true);
@@ -57,14 +57,14 @@ export function ChatInterface() {
       addMessage({
         role: "assistant",
         content: data.response || data.content || "No response",
-        agent: selectedAgent,
+        agent: selectedAgent as "hydrix" | "serhant" | "mio" | "karen",
       });
     } catch (error) {
       console.error("Error sending message:", error);
       addMessage({
         role: "assistant",
         content: "Sorry, I encountered an error. Please make sure the VoltAgent server is running on port 3141.",
-        agent: selectedAgent,
+        agent: selectedAgent as "hydrix" | "serhant" | "mio" | "karen",
       });
     } finally {
       setIsStreaming(false);

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { WaterStats, WaterIntake } from "../schemas/water";
+import type { WaterStats, WaterIntake } from "../../schemas/water";
 
 interface WaterState {
   stats: WaterStats | null;

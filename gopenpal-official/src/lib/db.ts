@@ -113,6 +113,7 @@ export class Database {
 
     const lastLogResult = await this.client.execute({
       sql: `SELECT timestamp FROM water_intake ORDER BY timestamp DESC LIMIT 1`,
+      args: [],
     });
 
     const today_ml = Number(result.rows[0]?.total || 0);
@@ -131,7 +132,8 @@ export class Database {
 
   async getWaterHistory(days: number = 7): Promise<WaterIntake[]> {
     const result = await this.client.execute({
-      sql: `SELECT * FROM water_intake WHERE timestamp >= datetime('now', '-${days} days') ORDER BY timestamp DESC`,
+      sql: `SELECT * FROM water_intake WHERE timestamp >= datetime('now', '-' || ? || ' days') ORDER BY timestamp DESC`,
+      args: [days],
     });
 
     return result.rows.map((row) => ({

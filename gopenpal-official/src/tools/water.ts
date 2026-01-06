@@ -1,4 +1,5 @@
 import { createTool } from "@voltagent/core";
+import { z } from "zod";
 import {
   waterLogInputSchema,
   waterHistoryInputSchema,
@@ -23,7 +24,7 @@ export const logWaterTool = createTool({
 export const getWaterStatsTool = createTool({
   name: "get_water_stats",
   description: "Get current water intake statistics for today",
-  parameters: {},
+  parameters: z.object({}),
   execute: async () => {
     const stats = await db.getWaterStats();
     return stats;

@@ -1,6 +1,6 @@
 import { VoltAgent } from "@voltagent/core";
 import { honoServer } from "@voltagent/server-hono";
-import { createLogger } from "@voltagent/logger";
+import { createPinoLogger } from "@voltagent/logger";
 import { hydrixAgent } from "../agents/hydrix";
 import { serhantAgent } from "../agents/serhant";
 import { mioAgent } from "../agents/mio";
@@ -11,7 +11,7 @@ import { db } from "../lib/db";
 await db.initialize();
 
 // Create logger
-const logger = createLogger({
+const logger = createPinoLogger({
   level: "info",
   name: "gopenpal",
 });

@@ -21,7 +21,7 @@ export const createCronJobTool = createTool({
 export const listCronJobsTool = createTool({
   name: "list_cron_jobs",
   description: "List all scheduled cron jobs",
-  parameters: {},
+  parameters: z.object({}),
   execute: async () => {
     const jobs = await db.listCronJobs();
     return {
