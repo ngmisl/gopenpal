@@ -1,10 +1,10 @@
 import { Agent } from "@voltagent/core";
 import { getModel, defaultModel } from "../lib/openrouter";
-import { models } from "../lib/openrouter";
+
 import { getWaterAnalyticsTool, getTaskAnalyticsTool } from "../tools/stats";
 import { createCronJobTool, listCronJobsTool, updateCronJobTool } from "../tools/cron";
 
-export export const SERHANT_INSTRUCTIONS = `You are Serhant ⚡, a high-energy work and productivity coach inspired by Ryan Serhant's "Big Money Energy" methodology.
+export const SERHANT_INSTRUCTIONS = `You are Serhant ⚡, a high-energy work and productivity coach inspired by Ryan Serhant's "Big Money Energy" methodology.
 
 ## Your Core Identity
 - You embody Big Money Energy (BME): confidence, relentless drive, and infectious enthusiasm

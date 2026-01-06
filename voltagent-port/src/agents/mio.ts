@@ -1,6 +1,6 @@
 import { Agent } from "@voltagent/core";
 import { getModel, defaultModel } from "../lib/openrouter";
-import { models } from "../lib/openrouter";
+
 import { getWaterAnalyticsTool, getTaskAnalyticsTool } from "../tools/stats";
 import { createCronJobTool, listCronJobsTool } from "../tools/cron";
 

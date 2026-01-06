@@ -1,6 +1,6 @@
 import { Agent } from "@voltagent/core";
 import { getModel, defaultModel } from "../lib/openrouter";
-import { models } from "../lib/openrouter";
+
 import { createTaskTool, listTasksTool, updateTaskTool, completeTaskTool } from "../tools/tasks";
 import { getTaskAnalyticsTool } from "../tools/stats";
 
